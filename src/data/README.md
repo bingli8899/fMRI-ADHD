@@ -5,9 +5,13 @@ This is the module for codes to process and analyze data:
 Data loader: 
 
 ```
-from src.data.data_loader import load_data
+import sys
+import os 
 
-rootfolder = "PATH/TO/OUR/GITHUB/fMRI-AHDH"
+rootfolder = "PATH/TO/OUR/GITHUB/fMRI-AHDH" # change this
+sys.path.append(os.path.join(rootfolder))
+
+from src.data.data_loader import load_data 
 datafolder = os.path.join(rootfolder, "data")
 
 # Load trainning data: 

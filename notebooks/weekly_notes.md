@@ -10,6 +10,6 @@ c. Talk about how to approach the project:
 
 # Feb 17 to Feb 22: 
 To-do list for Bing: 
-a. finish KNN inputation and push to github 
+a. finish KNN inputation and push to github --> Haven't yet down --> sorry 
 b. organize github and invite other members 
 c. add dog string to functions in utility 

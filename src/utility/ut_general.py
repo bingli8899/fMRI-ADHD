@@ -25,6 +25,25 @@ def return_missing_list(df, df_name):
         return []  # Explicitly return an empty list
     else:  
         return missing_lst
+
+def count_levels_for_columns(col_list, df, printing=True):      
+    num_lst = [] 
+    for col in col_list: 
+        s = set(df[col])
+        num = len(s)
+        num_lst.append(num) 
+        
+        if printing: 
+            print(f"There are {num} levels in {col}, including:")
+            print(s) 
+    return num_lst  
+
+def check_connect_in_summary_stats(summary_df, stats_type): 
+    low = summary_df.loc[stats_type].sort_values().head(10) 
+    high = summary_df.loc[stats_type].sort_values(ascending=False).head(10) 
+    print(f"Columns with highest connectivity {stats_type} values: ", high)
+    print(f"Columns with lowest connectivity {stats_type} values: ", low)
+
     
     
 
