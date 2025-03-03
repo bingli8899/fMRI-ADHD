@@ -4,6 +4,9 @@ import pandas as pd
 from scipy.stats import chi2_contingency, ttest_ind, mannwhitneyu, shapiro
 
 def chi2_with_one_columns(column_lst, target_column, df):
+    """
+    Calculate chi_2 between the target column and all columns in a column list (in the same df） 
+    """
     for col in column_lst:
         contingency_table = pd.crosstab(df[target_column], df[col])
         chi2, p, _, _ = chi2_contingency(contingency_table)
@@ -11,6 +14,13 @@ def chi2_with_one_columns(column_lst, target_column, df):
         print(f"Chi-Square Stat: {chi2:.2f}, P-value: {p:.5f}")
 
 def ttest_utest_with_one_column(column_lst, target_column, df): 
+    """
+    If the target column is normally distributed -> conduct t-test between the target column and all columns in a column list 
+    
+    If the target column is not normally distributed -> conduct u-test between the target column and all columns in a column list 
+    
+    Print the p-values for both tests 
+    """
     df[target_column] = df[target_column].astype(str)
     for col in column_lst: 
         

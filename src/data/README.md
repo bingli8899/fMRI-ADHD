@@ -27,3 +27,36 @@ test_quant = test_data_dic["test_quant"]
 test_cate = test_data_dic["test_cate"]
 test_fmri = test_data_dic["test_fmri"]
 ```
+
+KNN imputer: 
+
+KNN imputer with categorical data encoded as onehot vector. 
+
+if merge_fmri = False (defult) -> Impute dataset based on the demographical. This one might be better. Output is the imputed demographic data. 
+
+If merge_fmri = true -> merge fmri dataset and conduct KNN imputing. This is not recommended only if there is a strong correlation between demographical missing values and fmri. The output is the imputed data with fmri
+
+Usage: 
+```
+from src.data.KNN_imputer import KNNImputer_with_OneHotEncoding
+
+df_dic = {
+    "train_cate": train_data_dic["train_cate"],
+    "train_quant": train_data_dic["train_quant"],
+    "test_cate": test_data_dic["test_cate"],
+    "test_quant": test_data_dic["test_quant"],
+    "train_fmri": train_data_dic["train_fmri"],
+    "test_fmri": test_data_dic["test_fmri"]
+}
+
+# Initialize processor and apply transformations (Don't merge fmri data）
+processors = KNNInputer_with_OneHotEncoding(k=5)
+train_imputed = processors.fit_transform(df_dic)  
+test_imputed = processors.transform(test_data_dic)  
+
+# If there you want to merge fmri data 
+processors_YESfmri = KNNInputer_with_OneHotEncoding(merge_fmri=True, k=5)
+train_imputed_Yesfmri = processors_YESfmri.fit_transform(df_dic)  
+test_imputed_Yesfmri = processors_YESfmri.transform(test_data_dic)  
+
+```
