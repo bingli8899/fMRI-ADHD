@@ -3,3 +3,9 @@ __pycache__/
 *.pyo
 
 notebooks/.ipynb_checkpoints/
+.DS_Store
+data/
+
+# Ignore stuff in Bing's local: 
+unused_codes/
+notebooks/Testing.ipynb
