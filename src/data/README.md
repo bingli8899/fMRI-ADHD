@@ -2,8 +2,7 @@
 
 This is the module for codes to process and analyze data: 
 
-Data loader: 
-
+Initializing data loader: 
 ```
 import sys
 import os 
@@ -11,9 +10,24 @@ import os
 rootfolder = "PATH/TO/OUR/GITHUB/fMRI-AHDH" # change this
 sys.path.append(os.path.join(rootfolder))
 
-from src.data.data_loader import load_data 
+from src.data.data_loader import load_data, load_or_cache_data
 datafolder = os.path.join(rootfolder, "data")
+```
+If loading from cached files: 
+```
+pickle_file = os.path.join(datafolder, "data.pkl") 
+train_data_dic, test_data_dic = load_or_cache_data(datafolder, pickle_file)
+train_quant = train_data_dic["train_quant"]
+train_outcome = train_data_dic["train_outcome"]
+train_cate = train_data_dic["train_cate"]
+train_fmri = train_data_dic["train_fmri"] 
+test_quant = test_data_dic["test_quant"]
+test_cate = test_data_dic["test_cate"]
+test_fmri = test_data_dic["test_fmri"]
 
+```
+If loading files repeated with specified train or test: 
+```
 # Load trainning data: 
 train_data_dic = load_data(datafolder, filetype = "train") 
 train_quant = train_data_dic["train_quant"]
@@ -49,13 +63,13 @@ df_dic = {
     "test_fmri": test_data_dic["test_fmri"]
 }
 
-# Initialize processor and apply transformations (Don't merge fmri data）
-processors = KNNInputer_with_OneHotEncoding(k=5)
+# Initialize processor and apply transformations -> Don't merge fmri data 
+processors = KNNImputer_with_OneHotEncoding(k=5)
 train_imputed = processors.fit_transform(df_dic)  
 test_imputed = processors.transform(test_data_dic)  
 
 # If there you want to merge fmri data 
-processors_YESfmri = KNNInputer_with_OneHotEncoding(merge_fmri=True, k=5)
+processors_YESfmri = KNNImputer_with_OneHotEncoding(merge_fmri=True, k=5)
 train_imputed_Yesfmri = processors_YESfmri.fit_transform(df_dic)  
 test_imputed_Yesfmri = processors_YESfmri.transform(test_data_dic)  
 

@@ -2,9 +2,37 @@ import os
 import pandas as pd
 from pathlib import Path
 import openpyxl 
+import pickle
+
+def load_or_cache_data(datafolder, pickle_file): 
+    """
+    Loads dataset from cache if available, else, loads it from the data loader,
+    Args:
+        datafolder (str): Path to the data directory.
+        pickle_file (str): Path to the cache file.
+    Returns: (train_data_dic, test_data_dic)
+    """
+    if os.path.exists(pickle_file):  
+        with open(pickle_file, "rb") as f:
+            train_data_dic, test_data_dic = pickle.load(f)
+        print("Loading data from cached files -> Done!")
+    else:
+        train_data_dic = load_data(datafolder, filetype = "train") 
+        test_data_dic = load_data(datafolder, filetype = "test")
+        with open(pickle_file, "wb") as f:
+            pickle.dump((train_data_dic, test_data_dic), f)
+        print("Loading data and save to cached files -> Done!")
+    return (train_data_dic, test_data_dic)
 
 def load_data(datapath, filetype = "train"):
-    
+    """
+    Load data: 
+    Args: 
+        datapath: The path to data file (both train and test)
+        filetype = {train or test}
+    returns: 
+        Load pd.dataframe (test or train)
+    """
     data = {} 
     
     if filetype.lower() == "train":
@@ -35,3 +63,4 @@ def load_data(datapath, filetype = "train"):
             data[key] = pd.read_csv(filepath) 
             
     return data
+
