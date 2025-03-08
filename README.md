@@ -1,11 +1,12 @@
 # fMRI-AHDH
 Repo to document my model for WiDS 2025 
 
-# Folder structure 
-## Repository Structure
-
 **Root Directory**
 ## Repository Structure
+
+Please follow the data structure below. 
+Data is not pushed and should be downloaded from: https://www.kaggle.com/competitions/widsdatathon2025/data 
+Usage of data loader and cacher is listed in [README.md](src/data/README.md) 
 
 - [README.md](README.md)  
 - `data/`  -> Data not pushed 
@@ -23,6 +24,8 @@ Repo to document my model for WiDS 2025
     - [data_loader.py](src/data/data_loader.py)  
     - [KNN_imputer.py](src/data/KNN_imputer.py)
     - [README.md](src/data/README.md)
+  - `model/`
+    - [__init__.py](src/model/__init__.py)  
   - `utility/`  
     - [__init__.py](src/utility/__init__.py)  
     - [ut_general.py](src/utility/ut_general.py)  
