@@ -2,7 +2,8 @@
 
 This is the module for codes to process and analyze data: 
 
-Initializing data loader: 
+# Initializing data loader: 
+
 ```
 import sys
 import os 
@@ -42,7 +43,39 @@ test_cate = test_data_dic["test_cate"]
 test_fmri = test_data_dic["test_fmri"]
 ```
 
-KNN imputer: 
+# Make a toy dataset to test codes: 
+To run and test codes in a much smaller datasets: 
+
+```
+# Assuing data loaded from load_data or load_or_cache_data above 
+from src.data.make_toy_dataset import make_toy_dataset 
+
+# default setting: 
+train_toy = make_toy_dataset(data_dic, 
+    dataset_type: str = "train", 
+    n_subjects = 30, 
+    n_regions = 30, output_path = current_directory)   
+
+# Example usage: 
+
+# To get first 30 participants and first 30 brain regions (ROI) -> default setting 
+train_toy =  make_toy_dataset(train_data_dic) 
+# This return a dic = {
+    "train_fmri": pd.DataFrame,  # fMRI data subset
+    "train_outcome": pd.DataFrame  # ADHD + Sex labels 
+} 
+# This also saves the toy.csv to current_dictory 
+
+test_toy = make_toy_dataset(test_data_dic, data_type = "test", n_subject = 100, output_path = datafolder) 
+# This return a dic = {
+    "test_fmri": pd.DataFrame,  # fMRI data subset
+    "train_outcome": None  # no label 
+} 
+# This saves toy.csv to datafolder
+
+```
+
+# KNN imputer: 
 
 KNN imputer with categorical data encoded as onehot vector. 
 
@@ -74,3 +107,4 @@ train_imputed_Yesfmri = processors_YESfmri.fit_transform(df_dic)
 test_imputed_Yesfmri = processors_YESfmri.transform(test_data_dic)  
 
 ```
+
