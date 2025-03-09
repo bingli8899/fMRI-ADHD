@@ -1,3 +1,0 @@
-*.bigfile filter=lfs diff=lfs merge=lfs -text
-data/TEST/TEST_FUNCTIONAL_CONNECTOME_MATRICES.csv filter=lfs diff=lfs merge=lfs -text
-data/TRAIN/TRAIN_FUNCTIONAL_CONNECTOME_MATRICES.csv filter=lfs diff=lfs merge=lfs -text
