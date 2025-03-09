@@ -23,6 +23,7 @@ Usage of data loader and cacher is listed in [README.md](src/data/README.md)
     - [__init__.py](src/data/__init__.py)  
     - [data_loader.py](src/data/data_loader.py)  
     - [KNN_imputer.py](src/data/KNN_imputer.py)
+    - [make_toy_dataset.py](src/data/make_toy_dataset.py)
     - [README.md](src/data/README.md)
   - `model/`
     - [__init__.py](src/model/__init__.py)  
