@@ -64,19 +64,64 @@ pip install nvidia-cuda-runtime-cu12
 python -c "import torch; print(torch.version.cuda)"
 ```
 
-# Option 1: 
+# Option 1 --> Install dgl 2.0.0 
 Install Dgl for cpu only 
+
 ```
 conda create -n dgl-cpu python=3.11 -y 
 conda activate dgl-cpu
 
+conda install pytorch==2.1.0 torchvision==0.16.0 torchaudio==2.1.0 cpuonly -c pytorch
+python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
 
+pip install numpy==1.26.4 --force-reinstall
+pip show numpy
+ 
+python -c "import torch; print(torch.__version__); print(torch.cuda.is_available())"
+# This prints out: 
+# 2.1.0
+# False 
 
+pip install dgl -f https://data.dgl.ai/wheels/repo.html # install cpu only dgl 
+python -c "import dgl; print(dgl.__version__)"
+
+# The above code suggests: ModuleNotFoundError: No module named 'setuptools.extern' 
+pip install setuptools==58.0.0 --force-reinstall
+
+pip uninstall dgl -y && pip install dgl -f https://data.dgl.ai/wheels/repo.html 
+python -c "import dgl; print(dgl.__version__)"
+# This gave an error message suggesting no torchdata 
+
+pip install torchdata
+python -c "import torchdata; print(torchdata.__version__)" # 0.11.0+cpu 
+ 
+python -c "import dgl; print(dgl.__version__)" # still suggests no torchdata 
+pip uninstall torchdata -y && pip install torchdata 
+
+# Let's install dgl 2.0.0 
+pip uninstall dgl -y
+pip install dgl==2.0.0 -f https://data.dgl.ai/wheels/repo.html
+
+python -c "import dgl; print(dgl.__version__)" # suggesting no pandas 
+pip install pandas 
+
+python -c "import dgl; print(dgl.__version__)"  
+# Oh yes, finally suggesting 2.0.0 
+
+# Further testing in interactive mode: 
+python3
+>>> import torch
+>>> import dgl
+>>> print("DGL Version:", dgl.__version__)
+DGL Version: 2.0.0
+>>> print("Using PyTorch Backend:", dgl.backend.backend_name)
+Using PyTorch Backend: pytorch
+
+# This is conda environment dgl-cpu
 
 ```
 
-
-# Option 2: 
+# Option 2 --> Install dgl 2.5 
 This follows the installation instruction of dgl: https://www.dgl.ai/dgl_docs/install/index.html
 
 ```
@@ -84,6 +129,29 @@ git clone --recurse-submodules https://github.com/dmlc/dgl.git
 cd dgl 
 bash script/create_dev_conda_env.sh -c
 
+conda activate dgl-dev-cpu
+bash script/build_dgl.sh -c # -> This is not necessary 
 
+cd python
+python setup.py install
+# Build Cython extension
+python setup.py build_ext --inplace
 
+python -c "import dgl; print(dgl.__version__)" # Suggesting a older numpy 
+pip install numpy==1.26.4 --force-reinstall
+
+python -c "import dgl; print(dgl.__version__)" # print out 2.5 --> Good! 
+python -c "import torch; print(torch.__version__)" # printed out 2.1.0+cpu 
+
+python3
+>>> import torch
+>>> import dgl
+>>> print("DGL Version:", dgl.__version__)
+DGL Version: 2.5
+>>> print("Using PyTorch Backend:", dgl.backend.backend_name)
+Using PyTorch Backend: pytorch
+
+# All this seem to be good. 
+# Good, everything is installed. 
+# This is conda env "dgl-dev-cpu" using dgl 2.5 
 ```
