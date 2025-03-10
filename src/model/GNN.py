@@ -103,7 +103,7 @@ def __len__(graph):
 # def make_graph(adjacent_dic): 
 
 def main(): 
-    train_toy_1person = make_toy_dataset(train_data_dic, n_subject = 1, n_regions = 30, output_path = datafolder)
+    train_toy_1person = make_toy_dataset(train_data_dic, n_subjects = 1, n_regions = 30, output_path = datafolder)
     adj_dict = process(train_toy_1person, mode="train")
     num_nodes = train_toy_fmri.shape[1] - 1  # Exclude participant_id column
     graph = make_graphs(adj_dict, num_nodes)
