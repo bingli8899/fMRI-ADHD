@@ -1,6 +1,26 @@
 # Scripts to save utility function 
-import os 
-import pandas as pd
+from types import SimpleNamespace
+from src.model.SimpleGNN import GCN_Model
+
+name_to_model = {
+    "GCN_Model": GCN_Model
+}
+
+# Convert dictionary to a nested object
+def dict_to_namespace(d):
+    if isinstance(d, dict):
+        return SimpleNamespace(**{k: dict_to_namespace(v) for k, v in d.items()})
+    elif isinstance(d, list):
+        return [dict_to_namespace(i) for i in d]
+    return d
+    
+# Convert SimpleNamespace to a dictionary
+def namespace_to_dict(obj):
+    if isinstance(obj, SimpleNamespace):
+        return {k: namespace_to_dict(v) for k, v in vars(obj).items()}
+    elif isinstance(obj, list):
+        return [namespace_to_dict(i) for i in obj]
+    return obj
 
 def cal_missing_percentage(df, col): 
     """

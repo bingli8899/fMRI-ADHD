@@ -1,0 +1,30 @@
+### Model Settings
+model_name: "GCN_Model"
+device: "cpu"
+model_params:
+  in_channels: 200
+  hidden_channels: 200
+  out_channels: 200
+  norm: "batch_norm"
+
+### Data
+root_folder: "C:\\Users\\tosso\\Documents\\widsdatathon2025"
+task: something
+
+### Optimizer
+
+
+### Hyperparameters
+num_folds: 5 # Cross validation
+lr: 0.001
+lr_scheduler_type: cosine
+num_layers: 3
+dropout: 0.1
+batch_size: 4
+num_epochs: 250
+master_seed: 54321
+patience: 20
+
+### output
+checkpoint_dir: './checkpoints'
+wandb: False

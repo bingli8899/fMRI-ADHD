@@ -9,3 +9,5 @@ notebooks/.ipynb_checkpoints/
 unused_codes/
 notebooks/Testing.ipynb
 ~/data
+
+./checkpoints
