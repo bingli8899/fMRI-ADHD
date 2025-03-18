@@ -18,8 +18,9 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from src.model.SimpleGNN import GCN_Model
 from src.data.data_loader import load_data, load_or_cache_data
-from src.utility.ut_GNNbranch import relabel_train_outcome
+from src.utility.ut_GNNbranch import relabel_train_outcome, recover_original_label
 from src.utility.ut_general import name_to_model, dict_to_namespace, namespace_to_dict
+
 from datetime import datetime
 
 def make_lovely_matrix(fmri_row): 
@@ -38,24 +39,29 @@ def make_lovely_matrix(fmri_row):
 
     return m 
 
-def create_graph_lst(train_outcome, train_fmri, config): 
+# If fmri_outcomes is None, it is the test data
+def create_graph_lst(fmri_data, config, fmri_outcomes = None): 
 
     graph_lst = [] 
 
-    # sort by participant_id first so later could be re-sampeld 
-    train_fmri_sorted = train_fmri.sort_values(by="participant_id")
-    train_outcome_sorted = train_outcome.sort_values(by="participant_id") 
-    train_fmri_sorted_connect = train_fmri_sorted.drop(columns = "participant_id")
-    train_label = relabel_train_outcome(train_outcome_sorted)
+    if fmri_outcomes is not None:
+        # sort by participant_id first so later could be re-sampeld 
+        train_fmri_sorted = fmri_data.sort_values(by="participant_id")
+        train_outcome_sorted = fmri_outcomes.sort_values(by="participant_id") 
+        train_fmri_sorted_connect = train_fmri_sorted.drop(columns = "participant_id")
+        train_label = relabel_train_outcome(train_outcome_sorted)
+        participant_ids = train_fmri_sorted["participant_id"].values
+        if (train_fmri_sorted["participant_id"].values != train_outcome_sorted["participant_id"].values).all(): 
+            raise ValueError("Oh nooooo! Mismatch in participant id")
 
-    if (train_fmri_sorted["participant_id"].values != train_outcome_sorted["participant_id"].values).all(): 
-        raise ValueError("Oh nooooo! Mismatch in participant id")
-
-    smote = SMOTE(sampling_strategy="auto", random_state=config.master_seed)
-    fmri_balanced, label_balanced = smote.fit_resample(train_fmri_sorted_connect, train_label["Label"])
-    train_label_tensor = th.tensor(label_balanced.to_numpy(dtype=np.int16), dtype=th.long)
-
-    graph_num, node_num =  train_label_tensor.shape[0], 200 # node_num hard-coded here 
+        smote = SMOTE(sampling_strategy="auto", random_state=config.master_seed)
+        fmri_balanced, label_balanced = smote.fit_resample(train_fmri_sorted_connect, train_label["Label"])
+        train_label_tensor = th.tensor(label_balanced.to_numpy(dtype=np.int16), dtype=th.long)
+    else: # No balancing for test data
+        participant_ids = fmri_data["participant_id"].values
+        fmri_balanced = fmri_data.drop(columns = "participant_id")
+        
+    graph_num, node_num =  len(fmri_balanced), 200 # node_num hard-coded here 
 
     print("Begin loading patient data ...")
     for i in tqdm(range(graph_num)): 
@@ -71,7 +77,8 @@ def create_graph_lst(train_outcome, train_fmri, config):
         graph_data = Data(x = x, # 200 x 200 identity matrix for all node features 
                           edge_index = th.LongTensor(edge_inx).transpose(1,0), 
                           edge_attr = edge_attr.clone().detach(), 
-                          y = train_label_tensor[i])
+                          y = train_label_tensor[i] if fmri_outcomes is not None else None,
+                          participant_id = participant_ids[i])
 
         graph_lst.append(graph_data) 
 
@@ -149,6 +156,9 @@ def cross_validation(model, graph_lst, config):
     )
     print(para_message)
     log_messages.append(para_message)
+    
+    now = datetime.now()
+    time_string = now.strftime("%Y-%m-%d-%H-%M-%S")
 
     for fold, (train_inx, val_inx) in enumerate(kfold.split(graph_lst)): 
         
@@ -160,12 +170,14 @@ def cross_validation(model, graph_lst, config):
         # if fold > 0: 
         #     print("Let's just break the loop at fold 1")
         #     break 
-
-        if config.wandb:
+    
+        if config.wandb.enabled:
             run = wandb.init(
-                entity="bli283-university-of-wisconsin-madison",
-                project="fmri-adhd",
-                config=config) 
+                project=config.wandb.project,
+                group=f"{config.model_name} {time_string}",
+                name=f"Fold {fold}",
+                config=config
+            ) 
 
 
         train_data = [graph_lst[i] for i in train_inx]
@@ -199,7 +211,7 @@ def cross_validation(model, graph_lst, config):
             log_messages.append(message1)
             log_messages.append(message2)
 
-            if config.wandb:
+            if config.wandb.enabled:
                 run.log({"train_acc": train_accuracy,
                         "train_loss": train_loss,
                         "val_acc": val_accuracy, 
@@ -220,12 +232,10 @@ def cross_validation(model, graph_lst, config):
                 log_messages.append(f"Validation loss reached a plateau at epoch {lowest_valloss_epoch}, break")
                 break
         
-        if config.wandb:
+        if config.wandb.enabled:
             run.finish()
     
     best_model_buffer.seek(0)
-    now = datetime.now()
-    time_string = now.strftime("%Y-%m-%d-%H-%M-%S")
     os.makedirs(os.path.join(config.checkpoint_dir, config.model_name, time_string), exist_ok=True)
     with open(os.path.join(config.checkpoint_dir, config.model_name, time_string, "checkpoint.pth"), "wb") as f:
         f.write(best_model_buffer.read())
@@ -240,11 +250,41 @@ def cross_validation(model, graph_lst, config):
         
     return log_messages 
 
-def main(args):
-    with open(args.config, "r") as file:
+def run_inference(data, path_to_checkpoint_folder):
+    with open(os.path.join(path_to_checkpoint_folder, "train_params.yaml"), "r") as file:
         config = yaml.safe_load(file)
         
+    config = dict_to_namespace(config)
+    model_class = name_to_model.get(config.model_name, "GCN_Model")  # Safely get class reference
+    model = model_class(config)
+    
+    model.load_state_dict(th.load(os.path.join(path_to_checkpoint_folder, "checkpoint.pth")))
+    model.eval()
+    
+    test_loader = DataLoader(data, batch_size=config.batch_size, shuffle=True)
+    
+    with open(os.path.join(path_to_checkpoint_folder, "final_predictions.csv"), "w") as f:
+        f.write("participant_id,ADHD_Outcome,Sex_F\n")
+        result_string = ""
+        with th.no_grad():  
+            for data in tqdm(test_loader):
+                out = model(data) 
+                predictions = out.argmax(dim=1)
+                for i in range(len(predictions)):
+                    ADHD_outcome, Sex_F = recover_original_label(predictions[i])
+                    result_string += f"{data.participant_id[i]},{ADHD_outcome},{Sex_F}\n"
+        f.write(result_string[:-1]) # Remove last newline
 
+    
+
+def main(args):
+    
+    config_path = args.train_config if args.train_config else args.test_config
+    if config_path == None:
+        raise ValueError("U idiot, specify either a train or test config file")
+    with open(config_path, "r") as file:
+        config = yaml.safe_load(file)
+        
     config = dict_to_namespace(config)
     
     # Data and function loading: 
@@ -252,26 +292,27 @@ def main(args):
     sys.path.append(os.path.join(rootfolder))
     #datafolder = os.path.join(rootfolder, "data")
     datafolder = rootfolder
-
+    
     pickle_file = os.path.join(datafolder, "data.pkl") 
     train_data_dic, test_data_dic = load_or_cache_data(datafolder, pickle_file)
-    train_outcome = train_data_dic["train_outcome"]
-    train_fmri = train_data_dic["train_fmri"] 
-    test_fmri = test_data_dic["test_fmri"]
 
-    master_seed = config.master_seed
-    th.manual_seed(master_seed)
-
-    
-    graph_lst = create_graph_lst(train_outcome, train_fmri, config)
-    
-    print(f"Starting {config.num_folds} fold cross-validation...")
-    cross_validation(config.model_name, graph_lst, config)
-
+    if args.test_config:
+        test_fmri = test_data_dic["test_fmri"]
+        graph_lst = create_graph_lst(test_fmri, config)
+        print(f"Starting inference...")
+        run_inference(graph_lst, config.path_to_checkpoint_folder)
+    elif args.train_config:
+        master_seed = config.master_seed
+        th.manual_seed(master_seed)
+        data_outcome = train_data_dic[f"train_outcome"]
+        data_mri = train_data_dic[f"train_fmri"] 
+        graph_lst = create_graph_lst(data_mri, config, data_outcome)
+        print(f"Starting {config.num_folds} fold cross-validation...")
+        cross_validation(config.model_name, graph_lst, config)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--wandb", action="store_true", default=False)
-    parser.add_argument("--config", type=str, default="./config.yaml")
+    parser.add_argument("--train_config", type=str, default=None)
+    parser.add_argument("--test_config", type=str, default=None)
     args = parser.parse_args()
     main(args)

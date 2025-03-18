@@ -10,6 +10,20 @@ def assign_label(row):
         return "2"
     elif row["ADHD_Outcome"] == 0 and row["Sex_F"] == 0:  # Male non-ADHD
         return "3"
+    
+def recover_original_label(num):
+    """Go back to original binary labels from 4 class label"""
+    num = int(num)
+    if num == 0:
+        return (1, 1)
+    elif num == 1:
+        return (0, 1)
+    elif num == 2:
+        return (1, 0)
+    elif num == 3:
+        return (0, 0)
+    else:
+        raise ValueError("The label should be a digit between 0 and 3 inclusive")
 
 
 def relabel_train_outcome(train_outcome, remove_previous_label = True): 

@@ -6,6 +6,7 @@ model_params:
   hidden_channels: 200
   out_channels: 200
   norm: "batch_norm"
+  pooling_function: "global_mean_pool"
 
 ### Data
 root_folder: "C:\\Users\\tosso\\Documents\\widsdatathon2025"
@@ -17,14 +18,15 @@ task: something
 ### Hyperparameters
 num_folds: 5 # Cross validation
 lr: 0.001
-lr_scheduler_type: cosine
 num_layers: 3
 dropout: 0.1
-batch_size: 4
+batch_size: 8
 num_epochs: 250
 master_seed: 54321
 patience: 20
 
 ### output
 checkpoint_dir: './checkpoints'
-wandb: False
+wandb:
+  enabled: True
+  project: ADHD-fMRI
