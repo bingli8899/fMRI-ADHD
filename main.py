@@ -50,13 +50,13 @@ def create_graph_lst(fmri_data, config, fmri_outcomes = None):
         train_outcome_sorted = fmri_outcomes.sort_values(by="participant_id") 
         train_fmri_sorted_connect = train_fmri_sorted.drop(columns = "participant_id")
         train_label = relabel_train_outcome(train_outcome_sorted)
-        participant_ids = train_fmri_sorted["participant_id"].values
         if (train_fmri_sorted["participant_id"].values != train_outcome_sorted["participant_id"].values).all(): 
             raise ValueError("Oh nooooo! Mismatch in participant id")
 
         smote = SMOTE(sampling_strategy="auto", random_state=config.master_seed)
         fmri_balanced, label_balanced = smote.fit_resample(train_fmri_sorted_connect, train_label["Label"])
         train_label_tensor = th.tensor(label_balanced.to_numpy(dtype=np.int16), dtype=th.long)
+        # participant_ids = train_fmri_sorted["participant_id"].values
     else: # No balancing for test data
         participant_ids = fmri_data["participant_id"].values
         fmri_balanced = fmri_data.drop(columns = "participant_id")
@@ -77,8 +77,8 @@ def create_graph_lst(fmri_data, config, fmri_outcomes = None):
         graph_data = Data(x = x, # 200 x 200 identity matrix for all node features 
                           edge_index = th.LongTensor(edge_inx).transpose(1,0), 
                           edge_attr = edge_attr.clone().detach(), 
-                          y = train_label_tensor[i] if fmri_outcomes is not None else None,
-                          participant_id = participant_ids[i])
+                          y = train_label_tensor[i] if fmri_outcomes is not None else None, 
+                          participant_id = participant_ids[i] if fmri_outcomes is None else None)
 
         graph_lst.append(graph_data) 
 
@@ -140,6 +140,7 @@ def cross_validation(model, graph_lst, config):
 
     kfold = KFold(n_splits = config.num_folds, shuffle=True, random_state=config.master_seed)
     log_messages = [] 
+    lowest_val_loss_global = float("inf")
     
     num_linear_predictors = 1 
     para_message = (f"""
@@ -178,7 +179,6 @@ def cross_validation(model, graph_lst, config):
                 name=f"Fold {fold}",
                 config=config
             ) 
-
 
         train_data = [graph_lst[i] for i in train_inx]
         val_data = [graph_lst[i] for i in val_inx]
@@ -223,8 +223,11 @@ def cross_validation(model, graph_lst, config):
                 lowest_valloss_epoch = epoch 
                 patience_count = 0 
 
-                best_model_buffer.seek(0)  
-                th.save(model.state_dict(), best_model_buffer)
+                # Save the best paras among k-folds 
+                if lowest_val_loss <= lowest_val_loss_global:
+                    best_model_buffer.seek(0)  
+                    th.save(model.state_dict(), best_model_buffer)
+
             else: 
                 patience_count += 1
             

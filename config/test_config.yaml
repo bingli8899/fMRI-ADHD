@@ -1,0 +1,5 @@
+### Model Settings
+path_to_checkpoint_folder: "/u/b/i/bingl/private/fMRI-AHDH/checkpoints/GCN_Model/2025-03-17-22-17-15"
+
+### Data
+root_folder: "/u/b/i/bingl/private/fMRI-AHDH/data"

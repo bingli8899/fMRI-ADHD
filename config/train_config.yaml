@@ -1,0 +1,32 @@
+### Model Settings
+model_name: "GCN_Model"
+device: "cpu"
+model_params:
+  in_channels: 200
+  hidden_channels: 200
+  out_channels: 200
+  norm: "batch_norm"
+  pooling_function: "global_mean_pool"
+
+### Data
+root_folder: "/u/b/i/bingl/private/fMRI-AHDH/data"
+task: Four class classification
+
+### Optimizer
+
+
+### Hyperparameters
+num_folds: 5 # Cross validation
+lr: 0.001
+num_layers: 3
+dropout: 0.1
+batch_size: 8
+num_epochs: 250
+master_seed: 54321
+patience: 20
+
+### output
+checkpoint_dir: './checkpoints'
+wandb:
+  enabled: True
+  project: ADHD-fMRI
