@@ -1,5 +1,0 @@
-### Model Settings
-path_to_checkpoint_folder: ".\\checkpoints\\GCN_Model\\2025-03-17-21-47-17"
-
-### Data
-root_folder: "C:\\Users\\tosso\\Documents\\widsdatathon2025"
