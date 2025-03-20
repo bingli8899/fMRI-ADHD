@@ -32,35 +32,44 @@ class KNNImputer_with_OneHotEncoding:
         Issues to be resolved: 
             -> How about ordinal data? 
         """
+        
         df_cate = df_dic["train_cate"].copy()
+        df_cate_test = df_dic["test_cate"].copy()
+        
+    
+        df_cate = df_cate.drop(columns=['Basic_Demos_Enroll_Year']) # Exclude the year variable because it is very different across train + test
+        df_cate_test = df_cate_test.drop(columns=['Basic_Demos_Enroll_Year']) # Exclude the year variable because it is very different across train + test
+        
         self.cate_var = df_cate.columns[1:]  # Exclude participant_id in the list with all categorical vairbales. 
 
         for col in self.cate_var: # Replace NaN values with a single "missing" category in training & test datasets
-            df_dic["train_cate"][col] = df_dic["train_cate"][col].astype(str).fillna("missing")
-            df_dic["test_cate"][col] = df_dic["test_cate"][col].astype(str).fillna("missing")
+            df_dic["train_cate"][col] = df_dic["train_cate"][col].fillna(-1).astype(int).astype(str)
+            df_dic["test_cate"][col] = df_dic["test_cate"][col].fillna(-1).astype(int).astype(str)
 
         all_categories = [sorted(set(df_dic["train_cate"][col]).union(set(df_dic["test_cate"][col]))) for col in self.cate_var]
-
         self.onehot_encoder = OneHotEncoder(
             categories=all_categories, # onehot for all possible categories in train and test 
             handle_unknown="ignore", 
             sparse_output=False
         )
 
-        self.onehot_encoder.fit(df_dic["train_cate"][self.cate_var])  
+        self.onehot_encoder.fit(df_dic["train_cate"][self.cate_var])
+        self.onehot_encoder.fit(df_dic["test_cate"][self.cate_var])  
         return self
 
 
-    def transform(self, df_dic): 
+    def transform(self, df_dic, split="train"): 
         """ 
         Apply One-Hot Encoding and KNN imputation on test data. 
         """
-        merged_df = self.merge_data(df_dic)
+        merged_df = self.merge_data(df_dic, split=split)
         df_transformed = merged_df.copy()
 
         for col in self.cate_var: # replaces NaN with "Missing" before encoding
             df_transformed[col] = df_transformed[col].astype(str).fillna("Missing")
 
+        df_transformed = df_transformed.drop(columns=['Basic_Demos_Enroll_Year']) # Exclude the year variable because it is very different across train + test
+        
         encoded_data = self.onehot_encoder.transform(df_transformed[self.cate_var]) # encoding 
         encoded_df = pd.DataFrame(
             encoded_data, 
@@ -79,16 +88,16 @@ class KNNImputer_with_OneHotEncoding:
         return final_df
 
         
-    def merge_data(self, df_dic, merge_fmri = False): # merge categorical, quantatitive, and fmri dataset 
+    def merge_data(self, df_dic, split = "train", merge_fmri = False): # merge categorical, quantatitive, and fmri dataset 
         """
         Merge quant data and cate data: 
             -> If merge_fmri = True, merge quantatitive data, categorical data, and fmri 
             -> If not, merge quantatitive and categorical data only
         """
         # Need to make deep copy to make sure the original dataset is not over-written 
-        df_cate_copy = df_dic["train_cate"].copy() if "train_cate" in df_dic else df_dic["test_cate"].copy()
-        df_quant_copy = df_dic["train_quant"].copy() if "train_quant" in df_dic else df_dic["test_quant"].copy()
-        df_fmri_copy = df_dic["train_fmri"].copy() if "train_fmri" in df_dic else df_dic["test_fmri"].copy()
+        df_cate_copy = df_dic[f"{split}_cate"].copy()
+        df_quant_copy = df_dic[f"{split}_quant"].copy()
+        df_fmri_copy = df_dic[f"{split}_fmri"].copy()
         
         participant_id = df_cate_copy.columns[0]
 
@@ -113,10 +122,11 @@ class KNNImputer_with_OneHotEncoding:
 
         return df 
     
-    def fit_transform(self, df_dic): 
+    def fit_transform(self, df_dic, split="train"): 
         """ Fit and transform the dataset. """
+        
         self.fit(df_dic)
-        return self.transform(df_dic)
+        return self.transform(df_dic, split=split)
 
 
 
