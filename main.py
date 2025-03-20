@@ -3,6 +3,7 @@ import yaml
 import sys
 import os 
 import io
+import pandas as pd
 import numpy as np
 import torch as th 
 import wandb
@@ -48,15 +49,39 @@ def create_graph_lst(fmri_data, config, fmri_outcomes = None):
         # sort by participant_id first so later could be re-sampeld 
         train_fmri_sorted = fmri_data.sort_values(by="participant_id")
         train_outcome_sorted = fmri_outcomes.sort_values(by="participant_id") 
-        train_fmri_sorted_connect = train_fmri_sorted.drop(columns = "participant_id")
+        # train_fmri_sorted_connect = train_fmri_sorted.drop(columns = "participant_id")
         train_label = relabel_train_outcome(train_outcome_sorted)
         if (train_fmri_sorted["participant_id"].values != train_outcome_sorted["participant_id"].values).all(): 
             raise ValueError("Oh nooooo! Mismatch in participant id")
+        
+        # Step 1: Create a mapping from participant_id to unique numbers
+        participant_mapping = {pid: idx for idx, pid in enumerate(train_fmri_sorted["participant_id"].unique())}
+
+        # Step 2: Replace participant_id with assigned numbers
+        train_fmri_sorted["participant_id_mapped"] = train_fmri_sorted["participant_id"].map(participant_mapping)
+
+        # Drop original participant_id before SMOTE
+        train_fmri_sorted = train_fmri_sorted.drop(columns=["participant_id"])
+
 
         smote = SMOTE(sampling_strategy="auto", random_state=config.master_seed)
-        fmri_balanced, label_balanced = smote.fit_resample(train_fmri_sorted_connect, train_label["Label"])
+        
+        
+        #train_fmri_sorted = train_fmri_sorted.set_index("participant_id")
+        #print(train_fmri_sorted.index)
+        fmri_balanced, label_balanced = smote.fit_resample(train_fmri_sorted, train_label["Label"])
+        
+         # Step 4: Convert back to DataFrame
+        fmri_balanced = pd.DataFrame(fmri_balanced, columns=train_fmri_sorted.columns)
+
+        # Step 5: Map back participant_id numbers to original IDs
+        reverse_mapping = {v: k for k, v in participant_mapping.items()}  # Reverse the mapping
+        fmri_balanced = pd.concat([fmri_balanced, pd.Series(fmri_balanced["participant_id_mapped"].map(reverse_mapping), name="participant_id")], axis=1)
+        
         train_label_tensor = th.tensor(label_balanced.to_numpy(dtype=np.int16), dtype=th.long)
-        # participant_ids = train_fmri_sorted["participant_id"].values
+        
+        participant_ids = fmri_balanced["participant_id"].values
+        fmri_balanced = fmri_balanced.drop(columns = ["participant_id", "participant_id_mapped"])
     else: # No balancing for test data
         participant_ids = fmri_data["participant_id"].values
         fmri_balanced = fmri_data.drop(columns = "participant_id")
@@ -78,7 +103,7 @@ def create_graph_lst(fmri_data, config, fmri_outcomes = None):
                           edge_index = th.LongTensor(edge_inx).transpose(1,0), 
                           edge_attr = edge_attr.clone().detach(), 
                           y = train_label_tensor[i] if fmri_outcomes is not None else None, 
-                          participant_id = participant_ids[i] if fmri_outcomes is None else None)
+                          participant_id = participant_ids[i])
 
         graph_lst.append(graph_data) 
 
@@ -135,6 +160,51 @@ def validate(val_loader, model, criterion):
 
     return test_loss, test_accuracy
 
+def add_metadata_to_graph_lst(graph_lst, config):
+    from src.data.KNN_imputer import KNNImputer_with_OneHotEncoding
+    from src.utility.ut_general import normalizing_factors
+    
+    rootfolder = config.root_folder # change this
+    sys.path.append(os.path.join(rootfolder))
+    #datafolder = os.path.join(rootfolder, "data")
+    datafolder = rootfolder
+    
+    pickle_file = os.path.join(datafolder, "data.pkl") 
+    train_data_dic, test_data_dic = load_or_cache_data(datafolder, pickle_file)
+    
+    train_data_dic.update(test_data_dic)
+    
+
+    imputer = KNNImputer_with_OneHotEncoding()
+    metadata = imputer.fit_transform(train_data_dic, split="train" if args.train_config else "test")
+
+    def encode_column_into_bins(df, column, bins, labels):
+        df['binned'] = pd.cut(df[column], bins=bins, labels=labels, right=True)
+        df_encoded = pd.get_dummies(df, columns=['binned'], prefix='', prefix_sep='', dtype=float)
+        df_encoded = df_encoded.drop(columns=[column])
+        return df_encoded
+
+    # Special case handedness column
+    metadata['EHQ_EHQ_Total'] = metadata['EHQ_EHQ_Total'] / 200 + 0.5
+    metadata = encode_column_into_bins(metadata, 'ColorVision_CV_Score' , [0, 12, 100], ['Color_Blind', 'Normal_Vision'])
+    metadata = encode_column_into_bins(metadata, 'MRI_Track_Age_at_Scan' , [0, 4, 11, 17, 30], ['Infant', 'Child', "Adolescent", "Adult"])
+
+    # Normalize everything to be between 0 and 1
+    # See utility/ut_general
+    for col in normalizing_factors:
+        metadata[col] /= normalizing_factors[col]
+
+    # Remove features in train which never appear
+    columns_which_dont_appear_in_train = ["Basic_Demos_Study_Site_5", "PreInt_Demos_Fam_Child_Race_-1", "Barratt_Barratt_P1_Edu_-1", "Barratt_Barratt_P1_Occ_-1", "Barratt_Barratt_P2_Edu_-1", "Barratt_Barratt_P2_Occ_-1", "Infant"]
+    for col in columns_which_dont_appear_in_train:
+        metadata = metadata.drop(columns=[col])
+    
+    raw_values = metadata.values
+    
+    print("Adding metadata to each graph ...")
+    for datapoint in tqdm(graph_lst):
+        value_index = metadata.index.tolist().index(datapoint.participant_id)
+        datapoint.metadata = th.FloatTensor(raw_values[value_index, :])
 
 def cross_validation(model, graph_lst, config): 
 
@@ -302,6 +372,8 @@ def main(args):
     if args.test_config:
         test_fmri = test_data_dic["test_fmri"]
         graph_lst = create_graph_lst(test_fmri, config)
+        if config.add_metadata:
+            add_metadata_to_graph_lst(graph_lst, config)
         print(f"Starting inference...")
         run_inference(graph_lst, config.path_to_checkpoint_folder)
     elif args.train_config:
@@ -310,6 +382,8 @@ def main(args):
         data_outcome = train_data_dic[f"train_outcome"]
         data_mri = train_data_dic[f"train_fmri"] 
         graph_lst = create_graph_lst(data_mri, config, data_outcome)
+        if config.add_metadata:
+            add_metadata_to_graph_lst(graph_lst, config)
         print(f"Starting {config.num_folds} fold cross-validation...")
         cross_validation(config.model_name, graph_lst, config)
 
