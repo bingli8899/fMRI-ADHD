@@ -1,6 +1,6 @@
 # Scripts to save utility function 
 from types import SimpleNamespace
-from src.model.SimpleGNN import GCN_Model
+from src.model.GCN import GCN_Model 
 
 # Some helpful mappings/constants
 name_to_model = {

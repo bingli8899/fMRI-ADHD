@@ -7,6 +7,7 @@ import pandas as pd
 import numpy as np
 import torch as th 
 import wandb
+import pickle
 
 from sklearn.model_selection import KFold
 from torch_geometric.data import Data
@@ -17,10 +18,14 @@ import random
 from imblearn.over_sampling import SMOTE #, ADASYN
 from torch.optim.lr_scheduler import ReduceLROnPlateau 
 
-from src.model.SimpleGNN import GCN_Model
-from src.data.data_loader import load_data, load_or_cache_data
+from src.model.GCN import GCN_Model
+from src.data.data_loader import load_or_cache_data # load_data 
 from src.utility.ut_GNNbranch import relabel_train_outcome, recover_original_label
 from src.utility.ut_general import name_to_model, dict_to_namespace, namespace_to_dict
+from src.utility.ut_stats import select_top_columns_MutualInfo_4classes
+from src.data.scaling import MeanStdScaler
+from src.data.KNN_imputer import KNNImputer_with_OneHotEncoding
+from src.utility.ut_general import normalizing_factors
 
 from datetime import datetime
 
@@ -41,11 +46,13 @@ def make_lovely_matrix(fmri_row):
     return m 
 
 # If fmri_outcomes is None, it is the test data
-def create_graph_lst(fmri_data, config, fmri_outcomes = None): 
+def create_graph_lst(fmri_data, config, fmri_outcomes = None, scaler=None, time_string = None): 
 
     graph_lst = [] 
+    scaler = MeanStdScaler() 
 
     if fmri_outcomes is not None:
+
         # sort by participant_id first so later could be re-sampeld 
         train_fmri_sorted = fmri_data.sort_values(by="participant_id")
         train_outcome_sorted = fmri_outcomes.sort_values(by="participant_id") 
@@ -63,29 +70,53 @@ def create_graph_lst(fmri_data, config, fmri_outcomes = None):
         # Drop original participant_id before SMOTE
         train_fmri_sorted = train_fmri_sorted.drop(columns=["participant_id"])
 
-
+        # Balancing dataset using SMOTE: 
         smote = SMOTE(sampling_strategy="auto", random_state=config.master_seed)
-        
         
         #train_fmri_sorted = train_fmri_sorted.set_index("participant_id")
         #print(train_fmri_sorted.index)
-        fmri_balanced, label_balanced = smote.fit_resample(train_fmri_sorted, train_label["Label"])
+        fmri_balanced_unscaled, label_balanced = smote.fit_resample(train_fmri_sorted, train_label["Label"])
         
-         # Step 4: Convert back to DataFrame
-        fmri_balanced = pd.DataFrame(fmri_balanced, columns=train_fmri_sorted.columns)
+        # Step 4: Convert back to DataFrame
+        fmri_balanced_df = pd.DataFrame(fmri_balanced_unscaled, columns=train_fmri_sorted.columns)
 
         # Step 5: Map back participant_id numbers to original IDs
         reverse_mapping = {v: k for k, v in participant_mapping.items()}  # Reverse the mapping
-        fmri_balanced = pd.concat([fmri_balanced, pd.Series(fmri_balanced["participant_id_mapped"].map(reverse_mapping), name="participant_id")], axis=1)
+        fmri_balanced_cat_df = pd.concat([fmri_balanced_df, pd.Series(fmri_balanced_df["participant_id_mapped"].map(reverse_mapping), name="participant_id")], axis=1)
         
         train_label_tensor = th.tensor(label_balanced.to_numpy(dtype=np.int16), dtype=th.long)
         
-        participant_ids = fmri_balanced["participant_id"].values
-        fmri_balanced = fmri_balanced.drop(columns = ["participant_id", "participant_id_mapped"])
+        participant_ids = fmri_balanced_cat_df["participant_id"].values
+        fmri_balanced_unscaled_dropped = fmri_balanced_cat_df.drop(columns = ["participant_id", "participant_id_mapped"])
+
+        # Fit the scaler after balancing 
+        if scaler is None: 
+            raise ValueError("You need to have scaling") 
+        else: 
+            scaler_type = config.scaling.scaler
+            pickled_scaling_file = os.path.join(config.checkpoint_dir, config.model_name, time_string, f"scaler_{scaler_type}.pth")
+            scaler.fit(fmri_balanced_unscaled_dropped)
+            # Save the scaler information into a pickle file to re-use during testing: 
+            with open(pickled_scaling_file, "wb") as f:
+                pickle.dump(scaler, f)
+
+        fmri_balanced = scaler.transform(fmri_balanced_unscaled_dropped)
+
     else: # No balancing for test data
-        participant_ids = fmri_data["participant_id"].values
-        fmri_balanced = fmri_data.drop(columns = "participant_id")
+
+        participant_ids = fmri_data["participant_id"].values 
+        fmri_dropped = fmri_data.drop(columns = "participant_id")
         
+        # Scaling the test set to make it distribute the same
+        if scaler is None: 
+            raise ValueError("You need to have scaling")
+        else: 
+            scaler_type = config.scaling.scaler
+            pickled_scaling_file = os.path.join(config.checkpoint_dir, config.model_name, time_string, f"scaler_{scaler_type}.pth")
+            with open(pickled_scaling_file, "rb") as f:
+                scaler = pickle.load(f)  
+        fmri_balanced = scaler.transform(fmri_dropped)
+
     graph_num, node_num =  len(fmri_balanced), 200 # node_num hard-coded here 
 
     print("Begin loading patient data ...")
@@ -108,17 +139,6 @@ def create_graph_lst(fmri_data, config, fmri_outcomes = None):
         graph_lst.append(graph_data) 
 
     return graph_lst 
-
-
-def data_splitting(graph_lst, splitting_threshold = 0.7): 
-    random.shuffle(graph_lst)
-
-    if splitting_threshold >= 1 or splitting_threshold <= 0: 
-        raise ValueError("What r u doing? 0 < Splitting threshold < 1")
-    split_inx = int(len(graph_lst) * splitting_threshold) #8:2 train test splitting 
-    train_data = graph_lst[:split_inx]
-    test_data = graph_lst[split_inx:]
-    return train_data, test_data 
 
     
 def train(train_loader, model, criterion, optimizer): 
@@ -161,12 +181,9 @@ def validate(val_loader, model, criterion):
     return test_loss, test_accuracy
 
 def add_metadata_to_graph_lst(graph_lst, config):
-    from src.data.KNN_imputer import KNNImputer_with_OneHotEncoding
-    from src.utility.ut_general import normalizing_factors
     
-    rootfolder = config.root_folder # change this
+    rootfolder = config.root_folder 
     sys.path.append(os.path.join(rootfolder))
-    #datafolder = os.path.join(rootfolder, "data")
     datafolder = rootfolder
     
     pickle_file = os.path.join(datafolder, "data.pkl") 
@@ -174,7 +191,6 @@ def add_metadata_to_graph_lst(graph_lst, config):
     
     train_data_dic.update(test_data_dic)
     
-
     imputer = KNNImputer_with_OneHotEncoding()
     metadata = imputer.fit_transform(train_data_dic, split="train" if args.train_config else "test")
 
@@ -206,7 +222,7 @@ def add_metadata_to_graph_lst(graph_lst, config):
         value_index = metadata.index.tolist().index(datapoint.participant_id)
         datapoint.metadata = th.FloatTensor(raw_values[value_index, :])
 
-def cross_validation(model, graph_lst, config): 
+def cross_validation(model, graph_lst, config, time_string): 
 
     kfold = KFold(n_splits = config.num_folds, shuffle=True, random_state=config.master_seed)
     log_messages = [] 
@@ -227,9 +243,6 @@ def cross_validation(model, graph_lst, config):
     )
     print(para_message)
     log_messages.append(para_message)
-    
-    now = datetime.now()
-    time_string = now.strftime("%Y-%m-%d-%H-%M-%S")
 
     for fold, (train_inx, val_inx) in enumerate(kfold.split(graph_lst)): 
         
@@ -258,8 +271,6 @@ def cross_validation(model, graph_lst, config):
 
         model_class = name_to_model.get(config.model_name, "GCN_Model")  # Safely get class reference
         model = model_class(config)
-        print(model)
-        
         optimizer = th.optim.Adam(model.parameters(), lr = config.lr)
         scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5, verbose=True)
         criterion = th.nn.CrossEntropyLoss() # multi-class
@@ -293,7 +304,7 @@ def cross_validation(model, graph_lst, config):
                 lowest_valloss_epoch = epoch 
                 patience_count = 0 
 
-                # Save the best paras among k-folds 
+                # Save the best paras among all k-folds 
                 if lowest_val_loss <= lowest_val_loss_global:
                     best_model_buffer.seek(0)  
                     th.save(model.state_dict(), best_model_buffer)
@@ -309,7 +320,6 @@ def cross_validation(model, graph_lst, config):
             run.finish()
     
     best_model_buffer.seek(0)
-    os.makedirs(os.path.join(config.checkpoint_dir, config.model_name, time_string), exist_ok=True)
     with open(os.path.join(config.checkpoint_dir, config.model_name, time_string, "checkpoint.pth"), "wb") as f:
         f.write(best_model_buffer.read())
     
@@ -345,12 +355,15 @@ def run_inference(data, path_to_checkpoint_folder):
                 predictions = out.argmax(dim=1)
                 for i in range(len(predictions)):
                     ADHD_outcome, Sex_F = recover_original_label(predictions[i])
-                    result_string += f"{data.participant_id[i]},{ADHD_outcome},{Sex_F}\n"
+                    result_string += f"{data.participant_id[i]},\t{ADHD_outcome},\t{Sex_F}\n"
         f.write(result_string[:-1]) # Remove last newline
 
     
 
 def main(args):
+
+    now = datetime.now()
+    time_string = now.strftime("%Y-%m-%d-%H-%M-%S")
     
     config_path = args.train_config if args.train_config else args.test_config
     if config_path == None:
@@ -363,29 +376,50 @@ def main(args):
     # Data and function loading: 
     rootfolder = config.root_folder # change this
     sys.path.append(os.path.join(rootfolder))
-    #datafolder = os.path.join(rootfolder, "data")
+    # datafolder = os.path.join(rootfolder, "data")
     datafolder = rootfolder
-    
     pickle_file = os.path.join(datafolder, "data.pkl") 
     train_data_dic, test_data_dic = load_or_cache_data(datafolder, pickle_file)
 
+    # Make the output dir first
+    os.makedirs(os.path.join(config.checkpoint_dir, config.model_name, time_string), exist_ok=True)
+
     if args.test_config:
         test_fmri = test_data_dic["test_fmri"]
-        graph_lst = create_graph_lst(test_fmri, config)
+
+        if config.scaling.enabled: 
+            scaler_type = config.scaling.scaler
+            if scaler_type == "MeanStd": 
+                scaler = MeanStdScaler()
+
+        graph_lst = create_graph_lst(test_fmri, config, fmri_outcomes = None, scaler = scaler, time_string = time_string)
+
         if config.add_metadata:
             add_metadata_to_graph_lst(graph_lst, config)
+
         print(f"Starting inference...")
         run_inference(graph_lst, config.path_to_checkpoint_folder)
+
     elif args.train_config:
         master_seed = config.master_seed
         th.manual_seed(master_seed)
         data_outcome = train_data_dic[f"train_outcome"]
         data_mri = train_data_dic[f"train_fmri"] 
-        graph_lst = create_graph_lst(data_mri, config, data_outcome)
+
+        # Enable scaling: 
+        if config.scaling.enabled: 
+            scaler_type = config.scaling.scaler 
+            if scaler_type == "MeanStd": 
+                scaler = MeanStdScaler()
+
+        graph_lst = create_graph_lst(data_mri, config, fmri_outcomes = data_outcome, scaler = scaler, time_string = time_string)
+        
+        # Add metadata 
         if config.add_metadata:
             add_metadata_to_graph_lst(graph_lst, config)
+
         print(f"Starting {config.num_folds} fold cross-validation...")
-        cross_validation(config.model_name, graph_lst, config)
+        cross_validation(config.model_name, graph_lst, config, time_string)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
