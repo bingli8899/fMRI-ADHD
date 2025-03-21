@@ -112,7 +112,7 @@ def create_graph_lst(fmri_data, config, fmri_outcomes = None, scaler=None, time_
             raise ValueError("You need to have scaling")
         else: 
             scaler_type = config.scaling.scaler
-            pickled_scaling_file = os.path.join(config.checkpoint_dir, config.model_name, time_string, f"scaler_{scaler_type}.pth")
+            pickled_scaling_file = os.path.join(config.path_to_checkpoint_folder, f"scaler_{scaler_type}.pth")
             with open(pickled_scaling_file, "rb") as f:
                 scaler = pickle.load(f)  
         fmri_balanced = scaler.transform(fmri_dropped)
@@ -381,9 +381,6 @@ def main(args):
     pickle_file = os.path.join(datafolder, "data.pkl") 
     train_data_dic, test_data_dic = load_or_cache_data(datafolder, pickle_file)
 
-    # Make the output dir first
-    os.makedirs(os.path.join(config.checkpoint_dir, config.model_name, time_string), exist_ok=True)
-
     if args.test_config:
         test_fmri = test_data_dic["test_fmri"]
 
@@ -401,6 +398,10 @@ def main(args):
         run_inference(graph_lst, config.path_to_checkpoint_folder)
 
     elif args.train_config:
+
+        # Make the output dir first
+        os.makedirs(os.path.join(config.checkpoint_dir, config.model_name, time_string), exist_ok=True)
+        
         master_seed = config.master_seed
         th.manual_seed(master_seed)
         data_outcome = train_data_dic[f"train_outcome"]
