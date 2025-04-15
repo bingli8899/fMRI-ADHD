@@ -1,4 +1,42 @@
 # Documentation of weekly notes: 
+# Meeting on March 13 
+
+1. Yihe's model: CNN
+    -no metadata 
+    -Binary classification (AHDH or non-ADHD) 
+    -3 layer CNN 
+    -Adam optimizer 
+    -Binary crosstropy 
+    -MaxPooling after each layer (--) 
+    -No cross validation (8:2) 
+    -Trainning accuracy 71% and validation accuracy 67% 
+    Final model idea: 
+    -Improve CNN 
+
+2. HongXi's model: PCA + MLP 
+    -with metadata 
+    -select top 50% PCA-acis --> 400 PC
+    -PCA only on fmri 
+    -Concatenate metadata to 400 PC axis and input into MLP 
+    -Binary classification 
+    -Random forest on binary classification: 
+        sex: trainning accuracy 0.81 (no splitting)
+        adhd: training accuracy 0.72 (no splitting)
+    -XGBoost 
+        sex: trainning accuracy 0.79 
+        adhd: trainning accuracy 0.74 
+    -MPL: 5-fold validation 4 layers 
+        Binary classification: 
+            -average across all cross-set: 
+                sex: 0.69 
+                adhd: 0.71 
+
+3. Bing's Model: GNN
+    -No metadata
+    -Four class classification 
+    -trainning accuracy based on 5-fold cross-validation: trainning (~95%) and test (~71%) 
+    Improvement: 
+    -Improve the graphs 
 
 
 # Meeting on Feb 27: 

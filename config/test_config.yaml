@@ -1,0 +1,12 @@
+### Model Settings
+path_to_checkpoint_folder: "/u/b/i/bingl/private/fMRI-AHDH/checkpoints/GCN_Model/2025-03-21-07-53-24"
+
+### Data
+root_folder: "/u/b/i/bingl/private/fMRI-AHDH/data"
+add_metadata: True
+task: Four class classification
+
+### scaler: 
+scaling:
+  enabled: True
+  scaler: "MeanStd"

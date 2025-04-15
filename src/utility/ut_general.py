@@ -1,6 +1,48 @@
 # Scripts to save utility function 
-import os 
-import pandas as pd
+from types import SimpleNamespace
+from src.model.GCN import GCN_Model 
+
+# Some helpful mappings/constants
+name_to_model = {
+    "GCN_Model": GCN_Model
+}
+
+# Alabama Parenting Questionnaire: https://www.youthcoalition.net/wp-content/uploads/2022/06/APQ.pdf
+# Strengths and Difficulties: https://acamh.onlinelibrary.wiley.com/doi/epdf/10.1111/j.1469-7610.1997.tb01545.x
+# To be consistent with connectome, normalize the values to be between 0 and 1
+normalizing_factors = {
+    "APQ_P_APQ_P_CP": 3 * 5,
+    "APQ_P_APQ_P_PP": 6 * 5,
+    "APQ_P_APQ_P_PM": 10 * 5,
+    "APQ_P_APQ_P_OPD": 7 * 5,
+    "APQ_P_APQ_P_INV": 10 * 5,
+    "APQ_P_APQ_P_ID": 6 * 5,
+    "SDQ_SDQ_Hyperactivity": 10.0,
+    "SDQ_SDQ_Peer_Problems": 10.0,
+    "SDQ_SDQ_Conduct_Problems": 10.0,
+    "SDQ_SDQ_Emotional_Problems": 10.0,
+    "SDQ_SDQ_Difficulties_Total": 40.0, # Sum of hyperactivity, peer problems, conduct problems, emotional_problems
+    "SDQ_SDQ_Prosocial": 10.0,
+    "SDQ_SDQ_Externalizing": 20.0, # Sum of conduct + hyperactivity (https://www.sdqinfo.org/a0.html)
+    "SDQ_SDQ_Generating_Impact": 10.0,
+    "SDQ_SDQ_Internalizing": 20.0, # Sum of emotional + peer symptoms (https://www.sdqinfo.org/a0.html)
+}
+
+# Convert dictionary to a nested object
+def dict_to_namespace(d):
+    if isinstance(d, dict):
+        return SimpleNamespace(**{k: dict_to_namespace(v) for k, v in d.items()})
+    elif isinstance(d, list):
+        return [dict_to_namespace(i) for i in d]
+    return d
+    
+# Convert SimpleNamespace to a dictionary
+def namespace_to_dict(obj):
+    if isinstance(obj, SimpleNamespace):
+        return {k: namespace_to_dict(v) for k, v in vars(obj).items()}
+    elif isinstance(obj, list):
+        return [namespace_to_dict(i) for i in obj]
+    return obj
 
 def cal_missing_percentage(df, col): 
     """

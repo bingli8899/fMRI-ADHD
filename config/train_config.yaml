@@ -1,0 +1,53 @@
+notes: |
+  Two linear predictor with metadata concatenated. 
+  ReLU activation in btw two linear projectors.
+  Normalization layer before linear projector. 
+  Using the new Fisher-Z transformation, well normalized data.   
+
+### Model Settings
+model_name: "GCN_Model"
+device: "cpu"
+model_params:
+  in_channels: 200
+  hidden_channels: 200
+  out_channels: 200
+  norm: "batch_norm"
+  pooling_function: "global_mean_pool" 
+  # pooling function chosen from: global_mean_pool, global_add_pool, global_sort_pool, global_max_pool 
+predictor_paras: 
+  norm_enabled: True # If add a normalization layer before predictor and model output from GCN 
+  predictor_type: Linear
+  num_pred_layers: 2 # Only this is hard coded for now 
+  activation_btw_predictors: ReLU
+
+### Data
+root_folder: "/u/b/i/bingl/private/fMRI-AHDH/data"
+# root_folder: "C:\\Users\\tosso\\Documents\\widsdatathon2025"
+add_metadata: True
+filter_top_fmri_columns: True
+num_top_fmri_columns: 100 # Okay, this need to think of 
+task: Four class classification
+
+### Optimizer
+
+
+### Hyperparameters
+num_folds: 5 # Cross validation
+lr: 0.001
+num_layers: 3
+dropout: 0.1
+batch_size: 16
+num_epochs: 250
+master_seed: 3407
+patience: 20
+
+### scaler: 
+scaling:
+  enabled: True
+  scaler: "MeanStd"
+
+### output
+checkpoint_dir: './checkpoints'
+wandb:
+  enabled: True
+  project: ADHD-fMRI

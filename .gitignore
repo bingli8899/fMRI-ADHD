@@ -9,3 +9,7 @@ notebooks/.ipynb_checkpoints/
 unused_codes/
 notebooks/Testing.ipynb
 ~/data
+
+# Tim gitignore stuff
+./checkpoints
+./wandb
