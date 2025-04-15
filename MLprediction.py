@@ -301,10 +301,7 @@ def preprocess_metadata(metadata):
     return metadata 
 
 def scaling_X(X, scaler, train = True): 
-    if train: 
-        return scaler.fit_transform(X)
-    else: 
-        return scaler.transform(X)
+    return scaler.fit_transform(X) if train else scaler.transform(X)
 
 def cross_validation(X, y, scaler, seed, num_folds, model_grid, scaler_enabled = True):
     
@@ -407,22 +404,22 @@ def run_inference_from_txt(txt_file, X_train, y_train, X_test, test_participant_
         clf.fit(X_train_scaled, y_train) 
         y_pred = clf.predict(X_test_scaled)
 
-        output_file = os.path.join(output_dir, f"final_predictions_{task}_{tag}.csv")
+        output_file = os.path.join(output_dir, f"final_predictions_{task}_{output_name}.csv")
         with open(output_file, "w") as f:
             if task == "four":
                 f.write("participant_id,ADHD_Outcome,Sex_F\n")
                 for pid, pred in zip(test_participant_ids, y_pred):
                     ADHD_outcome, Sex_F = recover_original_label(pred)
-                    f.write(f"{pid},\t{ADHD_outcome},\t{Sex_F}\n")
+                    f.write(f"{pid}\t{ADHD_outcome}\t{Sex_F}\n")
             else:
                 if task == "adhd": 
                     f.write(f"participant_id,ADHD_Outcome\n")
                     for pid, pred in zip(test_participant_ids, y_pred):
-                        f.write(f"{pid},{pred}\n")
+                        f.write(f"{pid}\t{pred}\n")
                 else: 
-                    f.write(f"participant_id,Sex_Fe\n")
+                    f.write(f"participant_id,Sex_F\n")
                     for pid, pred in zip(test_participant_ids, y_pred):
-                        f.write(f"{pid},{pred}\n")
+                        f.write(f"{pid}\t{pred}\n")
 
     print(f"Inference complete on {output_name}")
 
@@ -434,17 +431,16 @@ def main(args):
     time_string = now.strftime("%Y-%m-%d-%H-%M-%S")
 
     # Set up configuration:
-    config_path = args.train_config if args.train_config else args.test_config
+    config_path = args.config
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
-
 
     config = dict_to_namespace(config)
 
     # Set up folder path: 
     rootfolder = config.root_folder 
     sys.path.append(os.path.join(rootfolder))
-    datafolder = rootfolder 
+    datafolder = os.path.join(rootfolder, "data")
 
     #Change below to arguments later: 
     model_name = config.model_params.model_name 
@@ -512,16 +508,16 @@ def main(args):
             print(f"Mean cv accuracy: {result['mean_accuracy']:.4f}\n")
             print("--------------------------------------------------\n")
 
-    if config.run_inference_on_test: 
+    if config.output_params.run_inference_on_test: 
         txt_file = output_path
         output_dir = config.output_params.output_inference_dir
-        os.mkdir(output_dir, exist_ok=True)
+        os.makedirs(output_dir, exist_ok=True)
         run_inference_from_txt(txt_file, X_train, y_train, X_test, test_participant_ids, task, output_name, output_dir, scaler) 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--train_config", type=str, default=None)
-    parser.add_argument("--test_config", type=str, default=None)
+    parser.add_argument("--config", type=str, default=None)
+    # parser.add_argument("--test_config", type=str, default=None)
     args = parser.parse_args()
 
     main(args)
