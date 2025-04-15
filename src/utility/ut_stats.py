@@ -1,9 +1,10 @@
 
 import os 
+import numpy as np 
 import pandas as pd
 from scipy.stats import chi2_contingency, ttest_ind, mannwhitneyu, shapiro
 from sklearn.feature_selection import mutual_info_classif
-from src.utility.ut_GNNbranch import relabel_train_outcome
+from src.utility.ut_general import relabel_train_outcome
 
 def chi2_with_one_columns(column_lst, target_column, df):
     """

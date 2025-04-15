@@ -1,11 +1,79 @@
 # Scripts to save utility function 
-from types import SimpleNamespace
+from types import SimpleNamespace 
 from src.model.GCN import GCN_Model 
+from src.model.DirGNNConv import DirGNN_model
+from src.model.NNconv import NNConv_model 
+from src.model.GATv2 import GATv2Conv_Model
+from src.model.TransConv import TransformerConv_Model
+from src.model.DirGNN_GatConv import DirGNN_GatConv_model 
+# from torch_geometric.nn import GCN, global_mean_pool, global_add_pool, global_sort_pool, global_max_pool
+# from torch.nn import Linear, Module, ReLU, LayerNorm, BatchNorm1d
 
-# Some helpful mappings/constants
+# Assign name to model name
 name_to_model = {
-    "GCN_Model": GCN_Model
+    "GCN_model": GCN_Model,
+    "DirGNN_model": DirGNN_model,
+    "NNConv_model": NNConv_model,
+    "GATv2_model": GATv2Conv_Model,
+    "TransConv_model": TransformerConv_Model,
+    "DirGNN_GatConv_model": DirGNN_GatConv_model
 }
+
+
+def assign_label(row):
+    """Assign new label based on ADHD and sex"""
+    if row["ADHD_Outcome"] == 1 and row["Sex_F"] == 1:  # Female ADHD
+        return "0"
+    elif row["ADHD_Outcome"] == 0 and row["Sex_F"] == 1:  # Female non-ADHD
+        return "1"
+    elif row["ADHD_Outcome"] == 1 and row["Sex_F"] == 0:  # Male ADHD
+        return "2"
+    elif row["ADHD_Outcome"] == 0 and row["Sex_F"] == 0:  # Male non-ADHD
+        return "3"
+    
+def recover_original_label(num):
+    """Go back to original binary labels from 4 class label"""
+    num = int(num)
+    if num == 0:
+        return (1, 1)
+    elif num == 1:
+        return (0, 1)
+    elif num == 2:
+        return (1, 0)
+    elif num == 3:
+        return (0, 0)
+    else:
+        raise ValueError("The label should be a digit between 0 and 3 inclusive")
+
+
+def relabel_train_outcome(train_outcome, remove_previous_label = True, task = "Four"): 
+    """
+    Assigns ADHD labels and optionally removes the previous ADHD_Outcome and Sex_F columns.
+    Args: 
+    - train_outcome (pd.DataFrame): DataFrame containing "ADHD_Outcome" and "Sex_F" columns.
+    - remove_previous_label (bool): If True, removes "ADHD_Outcome" and "Sex_F" columns. 
+    Returns:
+    - pd.DataFrame: Updated DataFrame with "ADHD_Label" and optionally without original columns.
+    """
+
+    if task.lower() == "four":  
+
+        train_outcome["Label"] = train_outcome.apply(assign_label, axis=1)
+        
+    if task.lower() == "adhd": 
+        train_outcome["Label"] = train_outcome["ADHD_Outcome"]
+
+    if task.lower() == "sex": 
+        train_outcome["Label"] = train_outcome["Sex_F"]
+
+    if remove_previous_label: 
+        train_outcome = train_outcome.drop(columns = ["ADHD_Outcome", "Sex_F"])
+    elif not remove_previous_label: 
+        print("Will not remove columns \"ADHD_Outcome\" and \"Sex_F\"")
+    else: 
+        raise ValueError("Hi you got the run emove_previous_label. True or False, plz")
+        
+    return train_outcome 
 
 # Alabama Parenting Questionnaire: https://www.youthcoalition.net/wp-content/uploads/2022/06/APQ.pdf
 # Strengths and Difficulties: https://acamh.onlinelibrary.wiley.com/doi/epdf/10.1111/j.1469-7610.1997.tb01545.x
@@ -43,6 +111,18 @@ def namespace_to_dict(obj):
     elif isinstance(obj, list):
         return [namespace_to_dict(i) for i in obj]
     return obj
+
+
+def write_model_grid(model_grid, file_handle):
+    """A function used in ML.py to write """
+    file_handle.write("Model Grid Configuration:\n")
+    for model_name, config in model_grid.items():
+        file_handle.write(f"Model: {model_name}\n")
+        file_handle.write("Parameter grid:\n")
+        for param, values in config["param_grid"].items():
+            file_handle.write(f"  {param}: {values}\n")
+        file_handle.write("--------------------------------------------------\n")
+    file_handle.write("\n")
 
 def cal_missing_percentage(df, col): 
     """

@@ -35,8 +35,7 @@ class KNNImputer_with_OneHotEncoding:
         
         df_cate = df_dic["train_cate"].copy()
         df_cate_test = df_dic["test_cate"].copy()
-        
-    
+
         df_cate = df_cate.drop(columns=['Basic_Demos_Enroll_Year']) # Exclude the year variable because it is very different across train + test
         df_cate_test = df_cate_test.drop(columns=['Basic_Demos_Enroll_Year']) # Exclude the year variable because it is very different across train + test
         
@@ -47,6 +46,7 @@ class KNNImputer_with_OneHotEncoding:
             df_dic["test_cate"][col] = df_dic["test_cate"][col].fillna(-1).astype(int).astype(str)
 
         all_categories = [sorted(set(df_dic["train_cate"][col]).union(set(df_dic["test_cate"][col]))) for col in self.cate_var]
+        
         self.onehot_encoder = OneHotEncoder(
             categories=all_categories, # onehot for all possible categories in train and test 
             handle_unknown="ignore", 
@@ -54,9 +54,8 @@ class KNNImputer_with_OneHotEncoding:
         )
 
         self.onehot_encoder.fit(df_dic["train_cate"][self.cate_var])
-        self.onehot_encoder.fit(df_dic["test_cate"][self.cate_var])  
+        # self.onehot_encoder.fit(df_dic["test_cate"][self.cate_var])  
         return self
-
 
     def transform(self, df_dic, split="train"): 
         """ 

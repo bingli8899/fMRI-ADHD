@@ -32,6 +32,10 @@ class MeanStdScaler():
         df_scaled = ((fisherZ_df - test_mean)/test_std) * self.train_std + self.train_mean 
         
         return df_scaled 
+
+    def fit_transform(self, df): 
+        self.fit(df)
+        return self.transform(df)
     
 
         
