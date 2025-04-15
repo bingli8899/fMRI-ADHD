@@ -1,0 +1,66 @@
+notes: |
+  DimeNetPlusPlus
+  Two linear predictor with metadata concatenated. 
+  ReLU activation in btw two linear projectors.
+  Normalization layer before linear projector. 
+
+### Model Settings
+model_name: "NNConv_model"
+device: "cpu"
+model_params:
+  in_channels: 200
+  hidden_channels: 128 # only one layer 
+  first_hidden_channels: 128
+  second_hidden_channels: 64
+  nn1_channels: 64
+  nn2_channels: 64
+  out_channels: 64
+  norm: "batch_norm"
+  pooling_function: "global_mean_pool" 
+  loss_weights: [0.25, 0.25, 0.25, 0.25]
+  label_smoothing: 0.05
+  
+  # pooling function chosen from: global_mean_pool, global_add_pool, global_sort_pool, global_max_pool 
+  #DirGNNConv specific paras: 
+  alpha: 0.5
+  #DimeNet/DimeNetPlusPlus specific paras: 
+  num_blocks: 3
+  num_spherical: 7
+  num_radial: 6
+
+predictor_paras: 
+  norm_enabled: False # If add a normalization layer before predictor and model output from GCN 
+  predictor_type: Linear
+  num_pred_layers: 2 # Only this is hard coded for now 
+  activation_btw_predictors: ReLU
+
+### Data
+root_folder: "/u/b/i/bingl/private/fMRI-AHDH/data"
+# root_folder: "C:\\Users\\tosso\\Documents\\widsdatathon2025"
+add_metadata: True
+task: four # adhd, sex 
+resampling_enabled: True
+
+### Optimizer
+
+
+### Hyperparameters
+num_folds: 5 # Cross validation
+lr: 0.0001
+num_layers: 3
+dropout: 0.3
+batch_size: 16
+num_epochs: 250
+master_seed: 3407
+patience: 20
+
+### scaler: 
+scaling:
+  enabled: True
+  scaler: "MeanStd"
+
+### output
+checkpoint_dir: './checkpoints'
+wandb:
+  enabled: True
+  project: ADHD-fMRI

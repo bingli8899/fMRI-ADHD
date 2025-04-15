@@ -1,0 +1,61 @@
+### Model Settings
+model_name: "DirGNN_model"
+device: "cpu"
+model_params:
+  in_channels: 200
+  first_hidden_channels: 128
+  second_hidden_channels: 64
+  out_channels: 32
+  pooling_function: "global_mean_pool" 
+  loss_weights: [0.5, 0.5] # [0.25, 0.25, 0.25, 0.25] 
+  label_smoothing: 0.05
+  # pooling function chosen from: global_mean_pool, global_add_pool, global_sort_pool, global_max_pool 
+  #DirGNNConv specific paras: 
+  alpha: 0.5
+  undirectional_graph: False
+
+node_features: 
+  identity: False
+  correlation_matrix: True
+  masking: False
+  mask_prob: 0.01
+
+predictor_paras: 
+  norm_enabled: False # If add a normalization layer before predictor and model output from GCN 
+  norm_type: "batchnorm"  # or "layernorm"
+  norm_timing: "before_meta" # or after 
+  # If norm_timing is "before", then a normalization layer is appied before concating with metadata -> normalize only GCN output
+  # If norm_time is "after", then a normalization layer is applied after concating with metadata -> normlize everything 
+  predictor_type: Linear
+  num_pred_layers: 2 # Only this is hard coded for now 
+  activation_btw_predictors: ReLU
+
+### Data
+root_folder: "/u/b/i/bingl/private/fMRI-AHDH/data"
+# root_folder: "C:\\Users\\tosso\\Documents\\widsdatathon2025"
+add_metadata: True
+resampling_enabled: True
+
+### Classification type 
+task: ADHD # ADHD # or sex
+
+### Optimizer
+
+### Hyperparameters
+num_folds: 5 # Cross validation
+lr: 0.0001
+batch_size: 16
+num_epochs: 250
+master_seed: 3407
+patience: 20
+
+### scaler: 
+scaling:
+  enabled: True
+  scaler: "MeanStd"
+
+### output
+checkpoint_dir: './checkpoints'
+wandb:
+  enabled: True
+  project: ADHD-fMRI
