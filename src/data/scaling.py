@@ -11,7 +11,9 @@ class MeanStdScaler():
         self.train_std = None
 
     def fisherZ_normalization(self, df): 
+        df = np.clip(df, -1 + 1e-6, 1 - 1e-6) # cut the limit to -1 and 1 
         df = np.arctanh(df)
+        #print("df after np.arctanh(df)", df)
         return df 
 
     def fit(self, df): 
@@ -28,10 +30,11 @@ class MeanStdScaler():
         fisherZ_df = self.fisherZ_normalization(df)
         test_mean = fisherZ_df.mean()
         test_std = fisherZ_df.std() 
-
-        test_std = np.where(test_std == 0.0, 1e-8, test_std) # Avoid 0 
+        # test_std = np.where(test_std == 0.0, 1e-8, test_std) # Avoid 0 
+        #print("test_std after removing 0", test_std)
 
         df_scaled = ((fisherZ_df - test_mean)/test_std) * self.train_std + self.train_mean 
+        # print(df_scaled)
         
         return df_scaled 
 

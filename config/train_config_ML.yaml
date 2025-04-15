@@ -8,14 +8,14 @@ root_folder: "/u/b/i/bingl/private/fMRI-AHDH"
 
 data_preparation:
   master_seed: 3407
-  enable_fmri: False # True or False 
-  k: 1000 # 100 or 1000
+  enable_fmri: True # True or False 
+  k: 100 # 100 or 1000
   # params should not be changed: 
   scaler_enabled: True # This should always be true -> Dont change
   scaler: "StandardScaler" # dont change this 
 
 output_params: 
-  task: "four" # "four", "adhd", "sex"  
+  task: "sex" # "four", "adhd", "sex"  
   run_inference_on_test: True
   output_inference_dir: "/u/b/i/bingl/private/fMRI-AHDH/ML_inference"
 
