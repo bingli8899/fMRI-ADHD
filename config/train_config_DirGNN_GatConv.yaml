@@ -1,0 +1,82 @@
+notes: | 
+  Mixed model DirGNN(GraphConv) --> GATv2Conv 
+
+### Model Settings
+model_name: "DirGNN_GatConv_model"
+device: "cpu"
+
+model_params:
+  in_channels: 200
+  # hidden_channels: 200
+  # out_channels: 200
+  norm: "batch_norm"
+  pooling_function: "global_mean_pool" 
+  activation_btw_conv: ReLU
+  # pooling function chosen from: global_mean_pool, global_add_pool, global_sort_pool, global_max_pool 
+  loss_weights: [0.25, 0.25, 0.25, 0.25]
+  label_smoothing: 0.02
+  #DirGNNConv specific paras: 
+  alpha: 0.5
+  # GCN model specific: 
+  undirectional_graph: False
+  # DirGNN-GATv2model specific: 
+  heads: 4
+  use_attention_pool: True
+  pooling_function_DirGNN: "global_max_pool"
+  pooling_function_GATv2: "global_mean_pool" # if use_attention_pool is true, then this doesn't matter 
+  out_channels_DirGNN: 200
+  output_channels_GATv2: 100
+  num_layers_GATv2: 1
+  num_layers_DirGNN: 3
+  dropout_DirGNN: 0.3
+  dropout_GATv2: 0.5
+
+node_features: 
+  identity: False
+  correlation_matrix: True
+  masking: False
+  mask_prob: 0.01
+
+predictor_paras: 
+  norm_enabled: False # If add a normalization layer before predictor and before adding to metadata 
+  norm_type: "batchnorm"  # or "layernorm"
+  norm_timing: "before_meta" # or after 
+  # If norm_timing is "before", then a normalization layer is appied before concating with metadata -> normalize only GCN output
+  # If norm_time is "after", then a normalization layer is applied after concating with metadata -> normlize everything 
+  predictor_type: Linear 
+  num_pred_layers: 2 # Only this is hard coded for now 
+  activation_btw_predictors: ReLU
+  predictor_hidden_channels: 64
+
+### Data
+root_folder: "/u/b/i/bingl/private/fMRI-AHDH/data"
+# root_folder: "C:\\Users\\tosso\\Documents\\widsdatathon2025"
+add_metadata: True
+resampling_enabled: True
+
+### Classification type 
+task: four # adhd, four
+
+### Optimizer
+
+
+### Hyperparameters
+num_folds: 5 # Cross validation
+lr: 0.0001
+num_layers: 1
+dropout: 0.1
+batch_size: 16
+num_epochs: 250
+master_seed: 3407
+patience: 20
+
+### scaler: 
+scaling:
+  enabled: True
+  scaler: "MeanStd"
+
+### output
+checkpoint_dir: './checkpoints'
+wandb:
+  enabled: True
+  project: ADHD-fMRI
