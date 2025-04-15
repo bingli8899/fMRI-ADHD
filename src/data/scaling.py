@@ -29,6 +29,8 @@ class MeanStdScaler():
         test_mean = fisherZ_df.mean()
         test_std = fisherZ_df.std() 
 
+        test_std = np.where(test_std == 0.0, 1e-8, test_std) # Avoid 0 
+
         df_scaled = ((fisherZ_df - test_mean)/test_std) * self.train_std + self.train_mean 
         
         return df_scaled 

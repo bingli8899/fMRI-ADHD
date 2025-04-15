@@ -1,4 +1,3 @@
-import argparse
 import yaml
 import sys
 import os 
@@ -10,44 +9,23 @@ import wandb
 import pickle
 from tqdm import tqdm
 import random 
+import argparse
 from collections import Counter, defaultdict 
 from copy import deepcopy
 from datetime import datetime
 
 from sklearn.model_selection import KFold
-from imblearn.over_sampling import SMOTE #, ADASYN
 
 from torch_geometric.data import Data
 from torch_geometric.loader import DataLoader 
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-# from src.model.GCN import GCN_Model
-# from src.model.DirGNNConv import DirGNN_model
 from src.data.data_loader import load_or_cache_data 
-from src.utility.ut_GNNbranch import relabel_train_outcome, recover_original_label
-from src.utility.ut_general import name_to_model, dict_to_namespace, namespace_to_dict
-from src.utility.ut_stats import select_top_columns_MutualInfo_4classes
+from src.utility.ut_general import name_to_model, dict_to_namespace, namespace_to_dict, relabel_train_outcome, recover_original_label, normalizing_factors
+from src.utility.ut_model import drop_edges, mask_node_features, add_noisy_node_features
 from src.data.scaling import MeanStdScaler
 from src.data.KNN_imputer import KNNImputer_with_OneHotEncoding
-from src.utility.ut_general import normalizing_factors
 
-
-def make_lovely_matrix(fmri_row): 
-    m = np.ones((200,200))  
-
-    for col_name, val in fmri_row.items(): 
-        if col_name == "participant_id": 
-            continue
-
-        node1, node2_temp = col_name.split("throw_")
-        node2 = node2_temp.split("thcolum")[0]
-
-        if val > 0: 
-            m[int(node1)][int(node2)] = val 
-        elif val < 0: 
-            m[int(node2)][int(node1)] = abs(val) 
-
-    return m 
 
 def preprocess_dataset(fmri_data, config, fmri_outcomes = None, time_string = None): 
     
@@ -59,8 +37,8 @@ def preprocess_dataset(fmri_data, config, fmri_outcomes = None, time_string = No
 
     if fmri_outcomes is not None:
 
-        train_fmri_sorted = fmri_data.sort_values(by="participant_id") # sort fmri matrix 
-        train_outcome_sorted = fmri_outcomes.sort_values(by="participant_id") # sort label 
+        train_fmri_sorted = fmri_data.sort_values(by="participant_id").reset_index(drop=True) # sort fmri matrix 
+        train_outcome_sorted = fmri_outcomes.sort_values(by="participant_id").reset_index(drop=True) # sort label 
 
         # Task = four, adhd, or sex 
         train_label = relabel_train_outcome(train_outcome_sorted, task=config.task) 
@@ -108,8 +86,27 @@ def preprocess_dataset(fmri_data, config, fmri_outcomes = None, time_string = No
 
         return fmri_scaled, None, participant_ids
 
+def make_lovely_matrix(fmri_row, used_to_build_node_feature = False): 
+    m = np.zeros((200,200))  
 
-def create_graph_lst(fmri, participant_ids, label = None): 
+    for col_name, val in fmri_row.items(): 
+        if col_name == "participant_id": 
+            continue
+
+        node1, node2_temp = col_name.split("throw_")
+        node2 = node2_temp.split("thcolum")[0]
+
+        if val > 0: 
+            m[int(node1)][int(node2)] = val 
+        elif val < 0: 
+            if used_to_build_node_feature: 
+                m[int(node2)][int(node1)] = val 
+            else: 
+                m[int(node2)][int(node1)] = abs(val) 
+
+    return m 
+
+def create_graph_lst(fmri, config, participant_ids, label = None): 
     """Make directional graphs stored in a graph lst"""
 
     graph_lst = [] 
@@ -120,13 +117,29 @@ def create_graph_lst(fmri, participant_ids, label = None):
 
         matrix = make_lovely_matrix(fmri.iloc[i,:])
 
+        # Use the correlation for each node as the node feature: 
+        if config.node_features.correlation_matrix: 
+            matrix = make_lovely_matrix(fmri.iloc[i,:], used_to_build_node_feature = True)
+            matrix_tensor = th.tensor(matrix).float()
+
+            # Mask node features to prevent overfitting if needed: 
+            if config.node_features.masking: 
+                mask = th.bernoulli(th.full_like(matrix_tensor, 1 - config.node_features.mask_prob))
+                x = matrix_tensor * mask 
+
+            x = matrix_tensor.clone()
+
+        # Use identity matrix as the node features: 
+        elif config.node_features.identity: 
+            x = th.eye(node_num) 
+
         # Direction --> sign on the matrix 
         edge_inx = matrix.nonzero()
         edge_inx = [[edge_inx[0][i], edge_inx[1][i]] for i in range(len(edge_inx[0]))]
         edge_attr = th.FloatTensor([matrix[idx[0], idx[1]] for idx in edge_inx])
         x = th.eye(node_num) 
 
-        graph_data = Data(x = x, # 200 x 200 identity matrix for all node features 
+        graph_data = Data(x = x.clone(), # 200 x 200 identity matrix for all node features 
                           edge_index = th.LongTensor(edge_inx).transpose(1,0), 
                           edge_attr = edge_attr.clone().detach(), 
                           y = label[i] if label is not None else None, 
@@ -138,26 +151,24 @@ def create_graph_lst(fmri, participant_ids, label = None):
 
 
 def make_lovely_unidirectional_matrix(fmri_row, pos = True): 
-    
-    m = np.ones((200,200))   
+    """Helper function to make unidirectional graphs"""
+    m = np.zeros((200,200))
     for col_name, val in fmri_row.items(): 
         if col_name == "participant_id": 
             continue
-
         node1, node2_temp = col_name.split("throw_")
         node2 = node2_temp.split("thcolum")[0]
 
-    if pos: 
-        if val > 0: 
-            m[int(node1)][int(node2)] = val 
-    else: 
-        if val < 0: 
-            m[int(node1)][int(node2)] = abs(val) 
+        if pos: 
+            if val > 0: 
+                m[int(node1)][int(node2)] = val 
+        else: 
+            if val < 0: 
+                m[int(node1)][int(node2)] = abs(val) 
             
     return m 
 
-
-def create_unidirectional_graph_lst(fmri, participant_ids, label = None): 
+def create_unidirectional_graph_lst(fmri, config, participant_ids, label = None): 
     """Make two unidirectional graph (positive and negative) stored in two graph lists"""
 
     graph_lst_pos, graph_lst_neg = [],[] 
@@ -168,9 +179,22 @@ def create_unidirectional_graph_lst(fmri, participant_ids, label = None):
 
     print("Begin loading patient data ... Making unidirectional graphs")
     for i in tqdm(range(graph_num)): 
+        
+        # Use the correlation for each node as the node feature: 
+        if config.node_features.correlation_matrix: 
+            matrix = make_lovely_unidirectional_matrix(fmri.iloc[i,:])
+            matrix_tensor = th.tensor(matrix).float()
 
-        # matrix = cont_matrix[i].view(199, 100) # ith row in connectivity matrix 
-        x = th.eye(node_num) 
+            # Mask node features to prevent overfitting if needed: 
+            if config.node_features.masking: 
+                mask = th.bernoulli(th.full_like(matrix_tensor, 1 - config.node_features.mask_prob))
+                x = matrix_tensor * mask 
+            x = matrix_tensor.clone()
+
+        # Use identity matrix as the node features: 
+        elif config.node_features.identity: 
+            x = th.eye(node_num) 
+        
         matrix_pos = make_lovely_unidirectional_matrix(fmri.iloc[i,:])
         matrix_neg = make_lovely_unidirectional_matrix(fmri.iloc[i,:], pos = False)
 
@@ -179,7 +203,7 @@ def create_unidirectional_graph_lst(fmri, participant_ids, label = None):
         edge_inx_pos = [[edge_inx_pos[0][i], edge_inx_pos[1][i]] for i in range(len(edge_inx_pos[0]))]
         edge_attr_pos = th.FloatTensor([matrix_pos[idx[0], idx[1]] for idx in edge_inx_pos])
 
-        graph_data_pos = Data(x = x, 
+        graph_data_pos = Data(x = x.clone(), 
                           edge_index = th.LongTensor(edge_inx_pos).transpose(1,0), 
                           edge_attr = edge_attr_pos.clone().detach(), 
                           y = label[i] if label is not None else None, 
@@ -190,20 +214,11 @@ def create_unidirectional_graph_lst(fmri, participant_ids, label = None):
         edge_inx_neg = [[edge_inx_neg[0][i], edge_inx_neg[1][i]] for i in range(len(edge_inx_neg[0]))]
         edge_attr_neg = th.FloatTensor([matrix_neg[idx[0], idx[1]] for idx in edge_inx_neg])
 
-        graph_data_neg = Data(x = x, 
+        graph_data_neg = Data(x = matrix_tensor.clone(), 
                           edge_index = th.LongTensor(edge_inx_neg).transpose(1,0), 
                           edge_attr = edge_attr_neg.clone().detach(), 
                           y = label[i] if label is not None else None, 
                           participant_id = participant_ids[i])
-
-        # edge_inx_pos = matrix_pos.nonzero(as_tuple = False).t() # uni-directional
-        # edge_attr_pos = matrix[edge_inx_pos[0], edge_inx_pos[1]] 
-
-        # edge_inx_neg = (matrix < 0).nonzero(as_tuple = False).t() # uni-directional
-        # edge_attr_neg = abs(matrix[edge_inx_neg[0], edge_inx_neg[1]]) 
-        
-        # x = th.eye(node_num) 
-        # print(f"for itr{i}, graph object: {graph_data}")
 
         graph_lst_pos.append(graph_data_pos) 
         graph_lst_neg.append(graph_data_neg) 
@@ -211,44 +226,86 @@ def create_unidirectional_graph_lst(fmri, participant_ids, label = None):
     return graph_lst_pos, graph_lst_neg
 
     
-def train(train_loader, model, criterion, optimizer): 
+def train(model, optimizer, criterion, train_loader = None, unidirectional = False, train_loader_pos = None, train_loader_neg = None): 
+
+    # This below line needs to be checked: 
+    if not train_loader and not unidirectional: 
+        raise ValueError("Something is wrong with train data loading") 
 
     model.train() 
     total_loss, total_samples, correct = 0, 0, 0
 
-    for data in tqdm(train_loader): 
-        optimizer.zero_grad() 
-        out = model(data)
-        loss = criterion(out, data.y) 
-        loss.backward()
-        optimizer.step() 
-        total_loss += loss.item() 
-        predictions = out.argmax(dim=1) 
-        correct += (predictions == data.y).sum().item()
-        total_samples += data.y.size(0)
-        print("prediction after training:", predictions)
+    if not unidirectional: 
+        for data in tqdm(train_loader): 
+            optimizer.zero_grad() 
+            out = model(data)
+            loss = criterion(out, data.y) 
+            loss.backward()
+            optimizer.step() 
+            total_loss += loss.item() 
+            predictions = out.argmax(dim=1) 
+            correct += (predictions == data.y).sum().item()
+            total_samples += data.y.size(0)
+            
+            print("prediction after training:", predictions)
 
-    train_accuracy = (correct / total_samples) * 100  
+        train_loss = total_loss / len(train_loader)   
+        train_accuracy = (correct / total_samples) * 100  
 
-    return total_loss / len(train_loader), train_accuracy 
+    else: 
+        # tqdm doesn't work here. 
+        for data_pos, data_neg in tqdm(zip(train_loader_pos, train_loader_neg)): 
+            optimizer.zero_grad() 
+            out = model(data_pos, data_neg)
+            loss = criterion(out, data_pos.y) # either data_pos or data_neg has the same y  
+            loss.backward()
+            optimizer.step() 
+            total_loss += loss.item() 
+            predictions = out.argmax(dim=1) 
+            correct += (predictions == data_pos.y).sum().item() # again, either data_pos or neg has the same u 
+            total_samples += data_pos.y.size(0)
+            print("prediction after training:", predictions)
 
-def validate(val_loader, model, criterion): 
+        train_loss = total_loss / len(train_loader_pos) # train_loader_pos and train_loader_neg has the same length    
+        train_accuracy = (correct / total_samples) * 100  
+
+    return train_loss, train_accuracy 
+
+def validate(model, criterion, val_loader = None, unidirectional = False, val_loader_pos = None, val_loader_neg = None): 
+
+    if not val_loader and not unidirectional: 
+        raise ValueError("Something is wrong with validation data loading") 
 
     model.eval()
     total_loss, correct, total_samples = 0, 0, 0 
 
-    with th.no_grad():  
-        for data in val_loader:
-            out = model(data) 
-            loss = criterion(out, data.y)
-            total_loss += loss.item()
-            predictions = out.argmax(dim=1)
-            correct += (predictions == data.y).sum().item()            
-            total_samples += data.y.size(0)
-            print("prediction after validation:", predictions)
+    if not unidirectional: 
+        with th.no_grad():  
+            for data in val_loader:
+                out = model(data) 
+                loss = criterion(out, data.y)
+                total_loss += loss.item()
+                predictions = out.argmax(dim=1)
+                correct += (predictions == data.y).sum().item()            
+                total_samples += data.y.size(0)
+                print("prediction after validation:", predictions)
 
-    test_loss = total_loss / len(val_loader)
-    test_accuracy = (correct / total_samples) * 100
+        test_loss = total_loss / len(val_loader)
+        test_accuracy = (correct / total_samples) * 100
+
+    else: 
+        with th.no_grad():  
+            for data_pos, data_neg in zip(val_loader_pos, val_loader_neg):
+                out = model(data_pos, data_neg) 
+                loss = criterion(out, data_pos.y) # either data_pos or data_neg's y should be fine. They are the same
+                total_loss += loss.item()
+                predictions = out.argmax(dim=1)
+                correct += (predictions == data_pos.y).sum().item()            
+                total_samples += data_pos.y.size(0)
+                print("prediction after validation:", predictions)
+        
+        test_loss = total_loss / len(val_loader_pos) # again, either val_loader_pos or val_loader_negative is fine 
+        test_accuracy = (correct / total_samples) * 100
 
     return test_loss, test_accuracy
 
@@ -265,7 +322,6 @@ def add_metadata_to_graph_lst(graph_lst, config):
     
     imputer = KNNImputer_with_OneHotEncoding() 
 
-    # think of this --> Tim will fix this later: 
     metadata = imputer.fit_transform(train_data_dic, split="train" if args.train_config else "test")
 
     def encode_column_into_bins(df, column, bins, labels):
@@ -299,16 +355,20 @@ def add_metadata_to_graph_lst(graph_lst, config):
         value_index = metadata.index.tolist().index(datapoint.participant_id)
         datapoint.metadata = th.FloatTensor(raw_values[value_index, :])
 
-def drop_edges(data, drop_prob=0.2):
-    num_edges = data.edge_index.size(1)
-    mask = th.rand(num_edges) > drop_prob
-    edge_index = data.edge_index[:, mask]
-    edge_attr = data.edge_attr[mask] if data.edge_attr is not None else None
-    data.edge_index = edge_index
-    data.edge_attr = edge_attr
-    return data
+        # De-bugging:
+        # print("De-bugging: Check if the feature is assigned to correct participant_id and labels")
+        # print("datapoint.participant_id", datapoint.participant_id)
+        # print("metadata.iloc.value.index \n", metadata.iloc[value_index,:])
+        # print("datapoint: \n", datapoint)
+        # print("datapoint.x: ", datapoint.x[198])
+        # print("metadata: \n", datapoint.metadata)
+        # print("edge index: \n", datapoint.edge_index)
+        # print("edge attr: \n", datapoint.edge_attr)
+
 
 def balancing_trainning_graph_lst(graph_lst, seed = 3407): 
+
+    print("Start balancing trainning data ...")
 
     random.seed(seed)
     print("Balancing the trainning set only --> Not the validation set")
@@ -323,8 +383,8 @@ def balancing_trainning_graph_lst(graph_lst, seed = 3407):
     balanced_graph_lst = []
 
     for label, graphs in class_to_graphs.items():
-        print("label", label)
-        print("graphs", graphs)
+        # print("label", label)
+        # print("graphs", graphs)
         n_to_add = max_count - len(graphs)
         balanced_graph_lst.extend(graphs) # add the current graph to the lst 
 
@@ -333,13 +393,11 @@ def balancing_trainning_graph_lst(graph_lst, seed = 3407):
             for graph in sampled: 
                 g_aug = deepcopy(graph) 
                 g_aug = drop_edges(g_aug, drop_prob=0.1)
-                balanced_graph_lst.extend(g_aug)
+                graph = mask_node_features(graph, mask_prob=0.1) 
+                graph = add_noisy_node_features(graph, noise_level=0.01)
+                balanced_graph_lst.append(g_aug)
 
-    random.shuffle(balanced_graph_lst) 
-
-    # de-bugging 
-    print("len(balanced_graph_lst)", len(balanced_graph_lst))
-    print(balanced_graph_lst)
+    # random.shuffle(balanced_graph_lst) 
     return balanced_graph_lst 
 
 
@@ -349,17 +407,23 @@ def cross_validation(model, train_fmri, train_outcomes, config, time_string):
     log_messages = [] 
     lowest_val_loss_global = float("inf")
     
-    num_linear_predictors = 1 
     para_message = (f"""
         Model: {config.model_name},
-        Number of Linear Predictors: {num_linear_predictors},
         Initial Learning Rate: {config.lr},
         {config.num_folds} fold cross validation each with {config.num_epochs} epochs
         Batch size {config.batch_size}, 
         Master seed: {config.master_seed},
-        Stopping patience: {config.patience}
-        """
-    )
+        With metadata: {config.add_metadata}, 
+        Unidirectional graph: {config.model_params.undirectional_graph}
+        """)
+
+    if config.model_name == "DirGNN_GatConv_model": 
+        model_specific_message = (f"""
+            # DirGNN-GATv2 specific parameters: 
+            num_layers_GATv2: {config.model_params.num_layers_GATv2},
+            num_layers_DirGNN: {config.model_params.num_layers_DirGNN},
+            """)
+
     print(para_message)
     log_messages.append(para_message)
 
@@ -377,14 +441,6 @@ def cross_validation(model, train_fmri, train_outcomes, config, time_string):
         # if fold > 0: 
         #     print("Let's just break the loop at fold 1")
         #     break 
-    
-        if config.wandb.enabled:
-            run = wandb.init(
-                project=config.wandb.project,
-                group=f"{config.model_name} {time_string}",
-                name=f"Fold {fold}",
-                config=config
-            ) 
 
         # Set up models 
         best_model_buffer = io.BytesIO() 
@@ -405,6 +461,7 @@ def cross_validation(model, train_fmri, train_outcomes, config, time_string):
         
         # split the train and validation set: 
         train_fmri_unbalanced = train_fmri_preprocessed.loc[train_inx]
+
         train_participant_ids = all_participant_ids[train_inx]
         train_label_tensor = th.tensor(train_label[train_inx].to_numpy(dtype=np.int16), dtype=th.long) 
 
@@ -414,16 +471,18 @@ def cross_validation(model, train_fmri, train_outcomes, config, time_string):
         val_label_tensor = th.tensor(val_label.to_numpy(dtype=np.int16), dtype=th.long) 
         
         # create graph lst for train and validation set separately: 
-        if config.model_name != "GCN_model" or not config.model_params.undirectional_graph: 
+        if not config.model_params.undirectional_graph: # Only GCN model has this, and there is a check to make sure GCN model has not undire. graphs 
             graph_lst_train = create_graph_lst(fmri = train_fmri_unbalanced, 
+                                            config = config,
                                             participant_ids = train_participant_ids, 
                                             label = train_label_tensor)
+            graph_lst_val =  create_graph_lst(fmri = val_fmri, 
+                                        config = config, 
+                                        participant_ids = val_participant_ids, 
+                                        label = val_label_tensor)
             
             if config.resampling_enabled: 
                 graph_lst_train = balancing_trainning_graph_lst(graph_lst_train)
-                graph_lst_val =  create_graph_lst(fmri = val_fmri, 
-                                          participant_ids = val_participant_ids, 
-                                          label = val_label_tensor)
                 
             if config.add_metadata:
                 add_metadata_to_graph_lst(graph_lst_train, config)
@@ -432,20 +491,21 @@ def cross_validation(model, train_fmri, train_outcomes, config, time_string):
             train_loader = DataLoader(graph_lst_train, batch_size=config.batch_size, shuffle=True)
             val_loader = DataLoader(graph_lst_val, batch_size=config.batch_size, shuffle=True)
 
-        
-        if config.model_name == "GCN_model" and config.model_params.undirectional_graph: 
+        else: 
             graph_lst_train_pos, graph_lst_train_neg = create_unidirectional_graph_lst(
                 fmri = train_fmri_unbalanced, 
+                config = config, 
                 participant_ids = train_participant_ids, 
                 label = train_label_tensor)
+            graph_lst_val_pos, graph_lst_val_neg = create_unidirectional_graph_lst(
+                    fmri = val_fmri, 
+                    config = config,
+                    participant_ids = val_participant_ids, 
+                    label = val_label_tensor)
             
             if config.resampling_enabled: 
                 graph_lst_train_pos = balancing_trainning_graph_lst(graph_lst_train_pos)
                 graph_lst_train_neg = balancing_trainning_graph_lst(graph_lst_train_neg)
-                graph_lst_val_pos, graph_lst_val_neg = create_unidirectional_graph_lst(
-                    fmri = val_fmri, 
-                    participant_ids = val_participant_ids, 
-                    label = val_label_tensor)
                 
             if config.add_metadata:
                 add_metadata_to_graph_lst(graph_lst_train_pos, config)
@@ -458,14 +518,42 @@ def cross_validation(model, train_fmri, train_outcomes, config, time_string):
 
             train_loader_neg = DataLoader(graph_lst_train_neg, batch_size=config.batch_size, shuffle=True)
             val_loader_neg = DataLoader(graph_lst_val_neg, batch_size=config.batch_size, shuffle=True)
-
+        
         message0 = f"Start training and validating for fold = {fold}"
         log_messages.append(message0)
 
+        print("Finish processing data... Upload to W&B ...")
+        if config.wandb.enabled: 
+            run = wandb.init(
+                project=config.wandb.project,
+                group=f"{config.model_name}-{config.task}-{time_string}",
+                name=f"Fold {fold}",
+                config=config
+            ) 
+
         for epoch in range(config.num_epochs):
 
-            train_loss, train_accuracy = train(train_loader, model, criterion, optimizer)
-            val_loss, val_accuracy = validate(val_loader, model, criterion) 
+            if config.model_name != "GCN_model" or not config.model_params.undirectional_graph: 
+                train_loss, train_accuracy = train(model = model, criterion = criterion, optimizer = optimizer, 
+                                                   train_loader = train_loader, 
+                                                   unidirectional= False, 
+                                                   train_loader_pos = None, train_loader_neg = None)
+
+                val_loss, val_accuracy = validate(model = model, criterion = criterion, val_loader = val_loader, 
+                                                  unidirectional = False, 
+                                                  val_loader_pos = None, val_loader_neg = None)
+                
+            elif config.model_name == "GCN_model" and config.model_params.undirectional_graph: 
+                train_loss, train_accuracy = train(model = model, optimizer = optimizer, criterion = criterion,
+                                                    train_loader = None, unidirectional = True, 
+                                                    train_loader_pos = train_loader_pos, 
+                                                    train_loader_neg = train_loader_neg)
+                val_loss, val_accuracy = validate(model = model, criterion = criterion, val_loader = None, 
+                                                  unidirectional = True, 
+                                                  val_loader_pos = val_loader_pos, 
+                                                  val_loader_neg = val_loader_neg)
+            else: 
+                raise ValueError("Something is wrong with model setting. R u using GCN? R u using unidirectional?")
             
             scheduler.step(val_loss) 
             updated_lr = optimizer.param_groups[0]['lr'] 
@@ -553,11 +641,35 @@ def run_inference(data, path_to_checkpoint_folder):
                 for data in tqdm(test_loader):
                     out = model(data) 
                     predictions = out.argmax(dim=1)
-                    for i in range(len(predictions)):
-                        result_string += f"{data.participant_id[i]},\t{ADHD_outcome}\n"
+
+                    if config.task == "adhd": 
+                        for i in range(len(predictions)):
+                            result_string += f"{data.participant_id[i]},\t{ADHD_outcome}\n"
+                    else: # config.task == "sex" 
+                        for i in range(len(predictions)):
+                            result_string += f"{data.participant_id[i]},\t{Sex_F}\n"
+                            
             f.write(result_string[:-1]) # Remove last newline
 
 
+def check_config_files(config): 
+    """A group to make sure the configuration files parameters are compatible"""
+
+    if config.task.lower() != "four" and len(config.model_params.loss_weights) != 2: 
+        raise ValueError("U idiot, change loss weights or check config.tasks!")
+    
+    if config.model_name != "GCN_model" and config.model_params.undirectional_graph: 
+        raise ValueError("R u sure u want to use unidirectional graphs for non-GCN models?") 
+    
+    if config.model_name == "GCN_model" and not config.model_params.undirectional_graph: 
+        raise ValueError("R u sure you dont want to use unidiretcional graohs for GCN model?")
+    
+    if config.predictor_paras.norm_enabled: 
+        if config.predictor_paras.norm_timing != "before" or config.predictor_paras.norm_timing != "after": 
+            raise ValueError("R need to specify a correct normalization timing -> before or after the linear projectors?")
+    
+    if not (config.node_features.identity or config.node_features.correlation_matrix):
+        raise ValueError("C’mon... you gotta use at least one type of node feature :(")
 
 def main(args):
 
@@ -565,6 +677,7 @@ def main(args):
     time_string = now.strftime("%Y-%m-%d-%H-%M-%S")
     
     config_path = args.train_config if args.train_config else args.test_config
+
     if config_path == None:
         raise ValueError("U idiot, specify either a train or test config file")
     with open(config_path, "r") as file:
@@ -572,8 +685,7 @@ def main(args):
 
     config = dict_to_namespace(config)
 
-    if config.task.lower() != "four" and len(config.model_params.loss_weights) != 2: 
-        raise ValueError("U idiot, change loss weights or check config.tasks!")
+    check_config_files(config)
     
     # Data and function loading: 
     rootfolder = config.root_folder # change this
@@ -586,9 +698,15 @@ def main(args):
     if args.test_config:
         test_fmri = test_data_dic["test_fmri"]
         
-        test_data, _, participant_ids = preprocess_dataset(fmri_data = test_fmri, config = config, fmri_outcomes = None, time_string = None) 
+        test_data, _, participant_ids = preprocess_dataset(fmri_data = test_fmri, 
+                                        config = config, 
+                                        fmri_outcomes = None, 
+                                        time_string = None) 
 
-        graph_lst_test = create_graph_lst(fmri = test_data, participant_ids = participant_ids, label = None)
+        graph_lst_test = create_graph_lst(fmri = test_data, 
+                                          config = config, 
+                                          participant_ids = participant_ids, 
+                                          label = None)
 
         if config.add_metadata:
             add_metadata_to_graph_lst(graph_lst_test, config)
