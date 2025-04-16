@@ -212,6 +212,9 @@ def load_and_impute_data(datafolder, task, enable_fmri, k, split = "train"):
     # Only the participant_ids from the test set is required: 
     test_participant_ids = test_metadata["participant_id"].values
     
+    # de-bugging: 
+    # print("test_participant_ids\n", test_participant_ids) 
+    
     # pre-process metadata 
     train_meta_processed = preprocess_metadata(train_metadata.drop(columns="participant_id"))
     test_meta_processed = preprocess_metadata(test_metadata.drop(columns="participant_id"))
@@ -223,27 +226,31 @@ def load_and_impute_data(datafolder, task, enable_fmri, k, split = "train"):
 
     # Select top k columns based on train and concatenate the matrix: 
     if enable_fmri: 
-        print(f"Select top {k} columns to be concated to the dataset...")
+
+        print(f"Selecting top {k} columns to be concated to the train dataset...")
         top_k_columns, train_fmri_selected = select_top_columns_MutualInfo_4classes(df_dic["train_fmri"], df_dic["train_outcome"], k = k) 
         train_fmri_selected_sorted = train_fmri_selected.sort_values(by = "participant_id").reset_index(drop=True)
+        
+        print(f"Selecting top {k} columns to be concated to the test dataset...")
+        test_fmri_sorted = df_dic["test_fmri"].sort_values(by="participant_id")
+        test_fmri_selected_sorted = test_fmri_sorted[["participant_id"] + top_k_columns]
+        test_fmri_selected_sorted = test_fmri_selected_sorted.reset_index(drop=True)
+
+        # test_fmri_selected = df_dic["test_fmri"][["participant_id"] + top_k_columns]
+        # test_fmri_selected_sorted = test_fmri_selected.sort_values(by="participant_id").reset_index(drop=True)
 
         # de-bugging: 
         # print("train_fmri_selected after selcting top k cols \n", train_fmri_selected) 
-        # print("train_fmri_selected after sorting \n", train_fmri_selected_sorted.head(10))
-        
-        test_fmri_selected = df_dic["test_fmri"][["participant_id"] + top_k_columns]
-        test_fmri_selected_sorted = test_fmri_selected.sort_values(by="participant_id").reset_index(drop = True)
+        # print("train_fmri_selected after sorting \n", train_fmri_selected_sorted)
+        # print("test_fmri_sorted \n", test_fmri_sorted)
+        # print("test_fmri_selected_sorted after sorting \n", test_fmri_selected_sorted)
 
         # Double check if the ordering match between meta and fmri dataset: 
         assert (train_metadata["participant_id"].values == train_fmri_selected_sorted["participant_id"].values).all()
         assert (test_metadata["participant_id"].values == test_fmri_selected_sorted["participant_id"].values).all()
         assert (train_outcome["participant_id"].values == train_fmri_selected_sorted["participant_id"].values).all()
 
-        # Drop participant_id and concatenate
-        # reset the index and drop it since the index might be out of order 
-        # train_fmri_features = train_fmri_selected_sorted.drop(columns="participant_id").reset_index(drop=True)
-        # test_fmri_features = test_fmri_selected_sorted.drop(columns="participant_id").reset_index(drop=True)
-        
+        # Drop participant_id
         train_fmri_features = train_fmri_selected_sorted.drop(columns="participant_id")
         test_fmri_features = test_fmri_selected_sorted.drop(columns="participant_id")
 
@@ -473,6 +480,12 @@ def main(args):
     model_grid = choose_model_grid(model_name, class_weights_small_diff, class_weights_large_diff, seed)
 
     X_train, y_train, X_test, test_participant_ids = load_and_impute_data(datafolder, task = task, enable_fmri = enable_fmri, k = k) 
+
+    # de-bugging: 
+    # print("X-train after data loading:\n", X_train)
+    # print("y_train after data loading:\n", y_train)
+    # print("X_test after data loading:\n", X_test)
+    # print("test participant ids:\n", test_participant_ids) 
 
     results = cross_validation(X_train, y_train, scaler, seed, num_folds, model_grid, scaler_enabled) 
 
