@@ -32,7 +32,7 @@ class MeanStdScaler():
         test_std = fisherZ_df.std() 
         test_std = np.where(test_std == 0.0, 1e-8, test_std) # Avoid 0  
 
-        if np.any(test_std == 0.0): 
+        if np.any(test_std == 0.0): # still double check 
             raise ValueError("std from scaling == 0. Check scaling.py")
 
         # de-bugging: 
