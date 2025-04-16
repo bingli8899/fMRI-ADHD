@@ -313,7 +313,7 @@ def add_metadata_to_graph_lst(graph_lst, config):
     
     rootfolder = config.root_folder 
     sys.path.append(os.path.join(rootfolder))
-    datafolder = rootfolder
+    datafolder = os.path.join(rootfolder, "data")
     
     pickle_file = os.path.join(datafolder, "data.pkl") 
     train_data_dic, test_data_dic = load_or_cache_data(datafolder, pickle_file)
