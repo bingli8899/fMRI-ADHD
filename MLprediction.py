@@ -172,7 +172,7 @@ def choose_model_grid(model_name, class_weights_small_diff, class_weights_large_
         }}}
     return model_grid
    
-def load_and_impute_data(datafolder, task, enable_fmri, k, split = "train"):
+def load_and_impute_data(datafolder, task, enable_fmri, k, scaler, scaler_enabled = True, split = "train"):
     pickle_file = os.path.join(datafolder, "data.pkl") 
     train_data_dic, test_data_dic = load_or_cache_data(datafolder, pickle_file)
 
@@ -259,9 +259,21 @@ def load_and_impute_data(datafolder, task, enable_fmri, k, split = "train"):
         # print("train_fmri_features\n", train_fmri_features) 
         # print("test_fmri_features\n", test_fmri_features)
 
+        # Only scale the fmri dataset: 
+        if scaler_enabled: 
+            print("Scaling both test and train fmri data")
+            train_fmri_features_scaled = scaling_X(train_fmri_features, scaler, train = True)
+            test_fmri_features_scaled = scaling_X(test_fmri_features, scaler, train = False)
+        if test_fmri_features.isna().values.any() or train_fmri_features.isna().values.any():
+            raise ValueError("NaNs found in X after scaling. Check MeanStdScaler.")
+        
+        # de-bugging: 
+        # print("train_fmri_features_scaled after scaling:\n", train_fmri_features_scaled)
+        # print("test_fmri_features_scaled after scaling:\n", test_fmri_features_scaled)
+
         # Concatenate metadata + fMRI features
-        X_train = pd.concat([train_meta_processed.reset_index(drop=True), train_fmri_features.reset_index(drop=True)], axis=1).values
-        X_test = pd.concat([test_meta_processed.reset_index(drop=True), test_fmri_features.reset_index(drop=True)], axis=1).values
+        X_train = pd.concat([train_meta_processed.reset_index(drop=True), train_fmri_features_scaled.reset_index(drop=True)], axis=1).values
+        X_test = pd.concat([test_meta_processed.reset_index(drop=True), test_fmri_features_scaled.reset_index(drop=True)], axis=1).values
 
     else: # If not concatenate fMRI data
         X_train = train_meta_processed.reset_index(drop=True).values # Need to double check to see if to debug this
@@ -273,8 +285,6 @@ def load_and_impute_data(datafolder, task, enable_fmri, k, split = "train"):
     # print("X_train final pandas dataset: \n", X_train[:10])
     # print("labels used\n", y_train[:10])
     # print("X_test final dataset: \n", X_test)
-
-    print("Dataset preparation done")
 
     return X_train, y_train, X_test, test_participant_ids
 
@@ -310,13 +320,7 @@ def preprocess_metadata(metadata):
 def scaling_X(X, scaler, train = True): 
     return scaler.fit_transform(X) if train else scaler.transform(X)
 
-def cross_validation(X, y, scaler, seed, num_folds, model_grid, scaler_enabled = True):
-    
-    if scaler_enabled: 
-        X_scaled = scaling_X(X, scaler)
-    
-    if np.isnan(X_scaled).any():
-        raise ValueError("NaNs found in X after scaling. Check MeanStdScaler.")
+def cross_validation(X, y, seed, num_folds, model_grid):
 
     cv = StratifiedKFold(n_splits=num_folds, shuffle=True, random_state=seed)
     smote = SMOTE(random_state=seed)
@@ -332,10 +336,10 @@ def cross_validation(X, y, scaler, seed, num_folds, model_grid, scaler_enabled =
             print(f"For {model_name}, starting a new parameter setting: {params}\n")
             fold_scores = []
 
-            for fold, (train_idx, val_idx) in enumerate(cv.split(X_scaled, y), 1):
+            for fold, (train_idx, val_idx) in enumerate(cv.split(X, y), 1):
                 
-                X_train, y_train = X_scaled[train_idx], y[train_idx]
-                X_val, y_val = X_scaled[val_idx], y[val_idx]
+                X_train, y_train = X[train_idx], y[train_idx]
+                X_val, y_val = X[val_idx], y[val_idx]
 
                 X_train_resampled, y_train_resampled = smote.fit_resample(X_train, y_train)
 
@@ -378,11 +382,7 @@ def parse_txt_file(txt_file):
             i += 1
     return result # This is the model configuration to be used 
 
-def run_inference_from_txt(txt_file, X_train, y_train, X_test, test_participant_ids, task, output_name, output_dir, scaler, scaler_enabled = True): 
-
-    if scaler_enabled: 
-        X_train_scaled = scaling_X(X_train, scaler)
-        X_test_scaled = scaling_X(X_test, scaler, train = False)
+def run_inference_from_txt(txt_file, X_train, y_train, X_test, test_participant_ids, task, output_name, output_dir): 
     
     top_models = parse_txt_file(txt_file) 
 
@@ -408,8 +408,8 @@ def run_inference_from_txt(txt_file, X_train, y_train, X_test, test_participant_
         model_class = model_class_map[model_name]
         clf = model_class(**params)
 
-        clf.fit(X_train_scaled, y_train) 
-        y_pred = clf.predict(X_test_scaled)
+        clf.fit(X_train, y_train) 
+        y_pred = clf.predict(X_test)
 
         output_file = os.path.join(output_dir, f"final_predictions_{task}_{output_name}.csv")
         with open(output_file, "w") as f:
@@ -479,7 +479,7 @@ def main(args):
 
     model_grid = choose_model_grid(model_name, class_weights_small_diff, class_weights_large_diff, seed)
 
-    X_train, y_train, X_test, test_participant_ids = load_and_impute_data(datafolder, task = task, enable_fmri = enable_fmri, k = k) 
+    X_train, y_train, X_test, test_participant_ids = load_and_impute_data(datafolder, task = task, enable_fmri = enable_fmri, k = k, scaler = scaler, scaler_enabled = True)
 
     # de-bugging: 
     # print("X-train after data loading:\n", X_train)
@@ -487,7 +487,7 @@ def main(args):
     # print("X_test after data loading:\n", X_test)
     # print("test participant ids:\n", test_participant_ids) 
 
-    results = cross_validation(X_train, y_train, scaler, seed, num_folds, model_grid, scaler_enabled) 
+    results = cross_validation(X_train, y_train, seed, num_folds, model_grid) 
 
     output_path = os.path.join(rootfolder, f"{output_name}_results_{time_string}.txt") 
 
@@ -525,7 +525,7 @@ def main(args):
         txt_file = output_path
         output_dir = config.output_params.output_inference_dir
         os.makedirs(output_dir, exist_ok=True)
-        run_inference_from_txt(txt_file, X_train, y_train, X_test, test_participant_ids, task, output_name, output_dir, scaler) 
+        run_inference_from_txt(txt_file, X_train, y_train, X_test, test_participant_ids, task, output_name, output_dir) 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

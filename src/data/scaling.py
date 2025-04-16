@@ -30,10 +30,19 @@ class MeanStdScaler():
         fisherZ_df = self.fisherZ_normalization(df)
         test_mean = fisherZ_df.mean()
         test_std = fisherZ_df.std() 
-        # test_std = np.where(test_std == 0.0, 1e-8, test_std) # Avoid 0 
-        #print("test_std after removing 0", test_std)
+        test_std = np.where(test_std == 0.0, 1e-8, test_std) # Avoid 0  
+
+        if np.any(test_std == 0.0): # still double check 
+            raise ValueError("std from scaling == 0. Check scaling.py")
+
+        # de-bugging: 
+        # print("test_mean:", test_mean)
+        # print("test_std after removing 0", test_std)
+        # print("train mean", self.train_mean)
+        # print("train std", self.train_std)
 
         df_scaled = ((fisherZ_df - test_mean)/test_std) * self.train_std + self.train_mean 
+        # de-bugging:
         # print(df_scaled)
         
         return df_scaled 

@@ -8,19 +8,19 @@ root_folder: "/u/b/i/bingl/private/fMRI-AHDH"
 
 data_preparation:
   master_seed: 3407
-  enable_fmri: True # True or False 
-  k: 100 # 100 or 1000
+  enable_fmri: True # True or False --> When = False, better to have k = 0 (although the code doesn't matter)
+  k: 100 # 100 or 1000 
   # params should not be changed: 
   scaler_enabled: True # This should always be true -> Dont change
   scaler: "StandardScaler" # dont change this 
 
 output_params: 
-  task: "sex" # "four", "adhd", "sex"  
+  task: "adhd" # "four", "adhd", "sex"  
   run_inference_on_test: True
   output_inference_dir: "/u/b/i/bingl/private/fMRI-AHDH/ML_inference"
 
-model_params: 
-  model_name: "testing" # "LogisticRegression", "GradientBoosting", "AdaBoost", "RandomForest", "KNN", "SGDClassifier", "tesing"
+model_params: # Chose from the below model_name, unless testing for errors then no need to use "testing"
+  model_name: "RandomForest" # "LogisticRegression", "GradientBoosting", "AdaBoost", "RandomForest", "KNN", "SGDClassifier", "tesing"
   seed: 3407
   num_folds: 5
 
