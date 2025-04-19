@@ -9,7 +9,11 @@ root_folder: "/u/b/i/bingl/private/fMRI-AHDH"
 data_preparation:
   master_seed: 3407
   enable_fmri: True # True or False --> When = False, better to have k = 0 (although the code doesn't matter)
+  # Below are parameters for mutual_info: If enable_fmri = false, ignore both mutual_info and ida 
+  mutual_info: True # when this is true, ida must be set to false
   k: 1000 # 100 or 1000 
+  # Below are parameters for IDA: 
+  ida: False # when this is true, mutual_info must be set to false 
   # params should not be changed: 
   scaler_enabled: True # This should always be true -> Dont change
   scaler: "StandardScaler" # dont change this 
@@ -22,7 +26,7 @@ output_params:
   output_inference_dir: "/u/b/i/bingl/private/fMRI-AHDH/ML_inference"
 
 model_params: # Chose from the below model_name, unless testing for errors then no need to use "testing"
-  model_name: "RandomForest" # "LogisticRegression", "GradientBoosting", "AdaBoost", "RandomForest", "KNN", "SGDClassifier", "tesing", "SVM", "NuSMV"
+  model_name: "testing" # "LogisticRegression", "GradientBoosting", "AdaBoost", "RandomForest", "KNN", "SGDClassifier", "tesing", "SVM", "NuSMV"
   seed: 3407 # no need to change
   num_folds: 5 # no need to change
 

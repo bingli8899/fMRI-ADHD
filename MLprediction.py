@@ -10,14 +10,12 @@ import re
 
 from imblearn.over_sampling import SMOTE
 from sklearn.model_selection import StratifiedKFold
-from sklearn.preprocessing import StandardScaler
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, AdaBoostClassifier
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.model_selection import ParameterGrid
 from sklearn.metrics import accuracy_score
 from sklearn.linear_model import LogisticRegression, SGDClassifier
 from sklearn.neural_network import MLPClassifier
-from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.svm import SVC, NuSVC
 
@@ -26,7 +24,7 @@ from src.utility.ut_general import relabel_train_outcome, recover_original_label
 from src.data.KNN_imputer import KNNImputer_with_OneHotEncoding
 from src.utility.ut_general import normalizing_factors, write_model_grid 
 from src.data.scaling import MeanStdScaler
-from src.utility.ut_stats import select_top_columns_MutualInfo_4classes
+from src.utility.ut_stats import select_top_columns_MutualInfo_4classes, apply_LDA_to_train_and_test
 from src.utility.ut_general import dict_to_namespace 
 
 def choose_model_grid(model_name, class_weights_small_diff, class_weights_large_diff, seed):
@@ -200,7 +198,7 @@ def choose_model_grid(model_name, class_weights_small_diff, class_weights_large_
             }}}
     return model_grid
    
-def load_and_impute_data(datafolder, task, enable_fmri, k, scaler, scaler_enabled = True, split = "train"):
+def load_and_impute_data(datafolder, task, ida, mutual_info, enable_fmri, k, scaler, scaler_enabled = True, split = "train"):
     pickle_file = os.path.join(datafolder, "data.pkl") 
     train_data_dic, test_data_dic = load_or_cache_data(datafolder, pickle_file)
 
@@ -255,53 +253,121 @@ def load_and_impute_data(datafolder, task, enable_fmri, k, scaler, scaler_enable
     # Select top k columns based on train and concatenate the matrix: 
     if enable_fmri: 
 
-        print(f"Selecting top {k} columns to be concated to the train dataset...")
-        top_k_columns, train_fmri_selected = select_top_columns_MutualInfo_4classes(df_dic["train_fmri"], df_dic["train_outcome"], k = k) 
-        train_fmri_selected_sorted = train_fmri_selected.sort_values(by = "participant_id").reset_index(drop=True)
+        if mutual_info: 
+            print(f"Selecting top {k} columns to be concated to the train dataset...")
+            top_k_columns, train_fmri_selected = select_top_columns_MutualInfo_4classes(df_dic["train_fmri"], 
+                                                                                        df_dic["train_outcome"], 
+                                                                                        task = task, k = k) 
+            train_fmri_selected_sorted = train_fmri_selected.sort_values(by = "participant_id").reset_index(drop=True)
+            
+            # de-bugging: 
+            print("top_k_columns, ", top_k_columns)
+            
+            print(f"Selecting top {k} columns to be concated to the test dataset...")
+            test_fmri_sorted = df_dic["test_fmri"].sort_values(by="participant_id")
+            test_fmri_selected_sorted = test_fmri_sorted[["participant_id"] + top_k_columns]
+            test_fmri_selected_sorted = test_fmri_selected_sorted.reset_index(drop=True)
+
+            # test_fmri_selected = df_dic["test_fmri"][["participant_id"] + top_k_columns]
+            # test_fmri_selected_sorted = test_fmri_selected.sort_values(by="participant_id").reset_index(drop=True)
+
+            # de-bugging: 
+            # print("train_fmri_selected after selcting top k cols \n", train_fmri_selected) 
+            # print("train_fmri_selected after sorting \n", train_fmri_selected_sorted)
+            # print("test_fmri_sorted \n", test_fmri_sorted)
+            # print("test_fmri_selected_sorted after sorting \n", test_fmri_selected_sorted)
+
+            # Drop participant_id
+            train_fmri_features = train_fmri_selected_sorted.drop(columns="participant_id")
+            test_fmri_features = test_fmri_selected_sorted.drop(columns="participant_id")
+
+            # Only scale the fmri dataset: 
+            if scaler_enabled: 
+                print("Scaling both test and train fmri data")
+                train_fmri_features = scaling_X(train_fmri_features, scaler, train = True)
+                test_fmri_features = scaling_X(test_fmri_features, scaler, train = False)
+            if test_fmri_features.isna().values.any() or train_fmri_features.isna().values.any():
+                raise ValueError("NaNs found in X after scaling. Check MeanStdScaler.")
+            
+            # de-bugging: 
+            # print("train_fmri_features_scaled after scaling:\n", train_fmri_features_scaled)
+            # print("test_fmri_features_scaled after scaling:\n", test_fmri_features_scaled)
+
+        elif ida: 
+
+            print(f"Doing IDA for both train and test...")
+
+            train_fmri_sorted = df_dic["train_fmri"].sort_values(by="participant_id").reset_index(drop=True)
+            test_fmri_sorted = df_dic["test_fmri"].sort_values(by="participant_id").reset_index(drop=True)
+            train_outcome = df_dic["train_outcome"].sort_values(by="participant_id").reset_index(drop=True)
+
+            train_participant_ids = train_fmri_sorted["participant_id"]
+            test_participant_ids = test_fmri_sorted["participant_id"]
+
+            train_fmri_ready_to_be_scaled = train_fmri_sorted.drop(columns="participant_id")
+            test_fmri_ready_to_be_scaled = test_fmri_sorted.drop(columns="participant_id")
+
+            # Double check the ordering since I am scared 
+            assert (train_fmri_sorted["participant_id"].values == train_outcome["participant_id"].values).all(), \
+            "Mismatch between train_fmri_sorted and train_outcome participant IDs!"
+
+            assert (train_fmri_sorted["participant_id"].values == train_participant_ids.values).all(), \
+                "Mismatch between train_fmri_sorted and train_participant_ids!"
+
+            assert (test_fmri_sorted["participant_id"].values == test_participant_ids.values).all(), \
+                "Mismatch between test_fmri_sorted and test_participant_ids!"
+            
+            assert (train_outcome["participant_id"].values == train_participant_ids.values).all(), \
+                "Mismatch between train_outcome and train_participant_ids!"
+
+            # Scale the input to ida first: 
+            if scaler_enabled: 
+                print("Scaling both test and train fmri data")
+                train_fmri_scaled = scaling_X(train_fmri_ready_to_be_scaled, scaler, train = True)
+                test_fmri_scaled = scaling_X(test_fmri_ready_to_be_scaled, scaler, train = False)
+            if test_fmri_scaled.isna().values.any() or train_fmri_scaled.isna().values.any():
+                raise ValueError("NaNs found in X after scaling. Check MeanStdScaler.")
+            
+            # I know this is very redundant but I don't want to think of anything easier at this moment ... 
+            train_fmri_scaled.insert(0, "participant_id", train_participant_ids)
+            test_fmri_scaled.insert(0, "participant_id", test_participant_ids)
+
+            n_components = 3 if task == "four" else 1 # n_classes - 1 
+
+            train_fmri_selected, test_fmri_selected = apply_LDA_to_train_and_test(train_fmri = train_fmri_scaled, 
+                                                                        test_fmri = test_fmri_scaled, 
+                                                                        fmri_outcomes = train_outcome, 
+                                                                        task = task, 
+                                                                        n_components= n_components)
+
+            # de-bugging: 
+            print("train_fmri_selected after lda", train_fmri_selected)
+            print("test_fmri_selected after lda", test_fmri_selected)
+
+            # Although these below have been sorted. Still sort again since I am scared now ... 
+            train_fmri_selected_sorted = train_fmri_selected.sort_values(by = "participant_id").reset_index(drop=True)
+            test_fmri_selected_sorted = test_fmri_selected.sort_values(by = "participant_id").reset_index(drop=True)
+            
+            # drop participant_id again: 
+            train_fmri_features = train_fmri_selected_sorted.drop(columns="participant_id")
+            test_fmri_features = test_fmri_selected_sorted.drop(columns="participant_id")
         
-        print(f"Selecting top {k} columns to be concated to the test dataset...")
-        test_fmri_sorted = df_dic["test_fmri"].sort_values(by="participant_id")
-        test_fmri_selected_sorted = test_fmri_sorted[["participant_id"] + top_k_columns]
-        test_fmri_selected_sorted = test_fmri_selected_sorted.reset_index(drop=True)
-
-        # test_fmri_selected = df_dic["test_fmri"][["participant_id"] + top_k_columns]
-        # test_fmri_selected_sorted = test_fmri_selected.sort_values(by="participant_id").reset_index(drop=True)
-
-        # de-bugging: 
-        # print("train_fmri_selected after selcting top k cols \n", train_fmri_selected) 
-        # print("train_fmri_selected after sorting \n", train_fmri_selected_sorted)
-        # print("test_fmri_sorted \n", test_fmri_sorted)
-        # print("test_fmri_selected_sorted after sorting \n", test_fmri_selected_sorted)
+        else: 
+            raise ValueError("When enable_fmri is true, EITHER but NOT BOTH mutual_info or ida below must be set up to true")
 
         # Double check if the ordering match between meta and fmri dataset: 
         assert (train_metadata["participant_id"].values == train_fmri_selected_sorted["participant_id"].values).all()
         assert (test_metadata["participant_id"].values == test_fmri_selected_sorted["participant_id"].values).all()
         assert (train_outcome["participant_id"].values == train_fmri_selected_sorted["participant_id"].values).all()
 
-        # Drop participant_id
-        train_fmri_features = train_fmri_selected_sorted.drop(columns="participant_id")
-        test_fmri_features = test_fmri_selected_sorted.drop(columns="participant_id")
-
         # De-bugging 
         # print("check fmri feature dataset after drop columns: \n") 
         # print("train_fmri_features\n", train_fmri_features) 
         # print("test_fmri_features\n", test_fmri_features)
 
-        # Only scale the fmri dataset: 
-        if scaler_enabled: 
-            print("Scaling both test and train fmri data")
-            train_fmri_features_scaled = scaling_X(train_fmri_features, scaler, train = True)
-            test_fmri_features_scaled = scaling_X(test_fmri_features, scaler, train = False)
-        if test_fmri_features.isna().values.any() or train_fmri_features.isna().values.any():
-            raise ValueError("NaNs found in X after scaling. Check MeanStdScaler.")
-        
-        # de-bugging: 
-        # print("train_fmri_features_scaled after scaling:\n", train_fmri_features_scaled)
-        # print("test_fmri_features_scaled after scaling:\n", test_fmri_features_scaled)
-
         # Concatenate metadata + fMRI features
-        X_train = pd.concat([train_meta_processed.reset_index(drop=True), train_fmri_features_scaled.reset_index(drop=True)], axis=1).values
-        X_test = pd.concat([test_meta_processed.reset_index(drop=True), test_fmri_features_scaled.reset_index(drop=True)], axis=1).values
+        X_train = pd.concat([train_meta_processed.reset_index(drop=True), train_fmri_features.reset_index(drop=True)], axis=1).values
+        X_test = pd.concat([test_meta_processed.reset_index(drop=True), test_fmri_features.reset_index(drop=True)], axis=1).values
 
     else: # If not concatenate fMRI data
         X_train = train_meta_processed.reset_index(drop=True).values # Need to double check to see if to debug this
@@ -490,8 +556,8 @@ def main(args):
     rootfolder = config.root_folder 
     sys.path.append(os.path.join(rootfolder))
     datafolder = os.path.join(rootfolder, "data")
-
-    #Change below to arguments later: 
+    
+    # Set to config --> I am tired of passing config to all functions lol 
     model_name = config.model_params.model_name 
     seed = config.model_params.seed
     num_folds = config.model_params.num_folds
@@ -502,11 +568,20 @@ def main(args):
     training_enabled = config.output_params.training_enabled # bool to enable training 
     testing_enabled = config.output_params.run_inference_on_test # bool to enable testing 
     aggregate_inference = config.output_params.aggregate_inference
+    ida = config.data_preparation.ida
+    mutual_info = config.data_preparation.mutual_info
+
+    # mutual_info and ida cannot be true at the same time: 
+    if mutual_info and ida:
+        raise ValueError("OHHH Nooo! You cannot enable both 'mutual_info' and 'ida' at the same time.")
 
     if config.data_preparation.enable_fmri: 
-        output_name = f"{model_name}-{task}Predic-{num_folds}folds-top{k}fmri"
+        if mutual_info: 
+            output_name = f"{model_name}-{task}Predic-MutualIndo-top{k}fmri"
+        else: #ida 
+            output_name = f"{model_name}-{task}Predic-ida"
     else: 
-        output_name = f"{model_name}-{task}Predic-{num_folds}folds-NOfmri"
+        output_name = f"{model_name}-{task}Predic-NOfmri"
 
     if config.output_params.task == "four": 
         # four class prediction use string "0", "1", "2", "3"
@@ -524,7 +599,14 @@ def main(args):
 
     model_grid = choose_model_grid(model_name, class_weights_small_diff, class_weights_large_diff, seed)
 
-    X_train, y_train, X_test, test_participant_ids = load_and_impute_data(datafolder, task = task, enable_fmri = enable_fmri, k = k, scaler = scaler, scaler_enabled = True)
+    X_train, y_train, X_test, test_participant_ids = load_and_impute_data(datafolder, 
+                                                                          task = task, 
+                                                                          ida = ida,
+                                                                          mutual_info = mutual_info, 
+                                                                          enable_fmri = enable_fmri, 
+                                                                          k = k, 
+                                                                          scaler = scaler, 
+                                                                          scaler_enabled = True)
 
     # de-bugging: 
     # print("X-train after data loading:\n", X_train)
