@@ -46,7 +46,7 @@ def recover_original_label(num):
         raise ValueError("The label should be a digit between 0 and 3 inclusive")
 
 
-def relabel_train_outcome(train_outcome, remove_previous_label = True, task = "Four"): 
+def relabel_train_outcome(train_outcome, remove_previous_label = True, task = "four"): 
     """
     Assigns ADHD labels and optionally removes the previous ADHD_Outcome and Sex_F columns.
     Args: 
@@ -57,7 +57,6 @@ def relabel_train_outcome(train_outcome, remove_previous_label = True, task = "F
     """
 
     if task.lower() == "four":  
-
         train_outcome["Label"] = train_outcome.apply(assign_label, axis=1)
         
     if task.lower() == "adhd": 
