@@ -6,6 +6,7 @@ from src.model.NNconv import NNConv_model
 from src.model.GATv2 import GATv2Conv_Model
 from src.model.TransConv import TransformerConv_Model
 from src.model.DirGNN_GatConv import DirGNN_GatConv_model 
+from src.model.SageGNN import SageGNN_model
 # from torch_geometric.nn import GCN, global_mean_pool, global_add_pool, global_sort_pool, global_max_pool
 # from torch.nn import Linear, Module, ReLU, LayerNorm, BatchNorm1d
 
@@ -16,7 +17,8 @@ name_to_model = {
     "NNConv_model": NNConv_model,
     "GATv2_model": GATv2Conv_Model,
     "TransConv_model": TransformerConv_Model,
-    "DirGNN_GatConv_model": DirGNN_GatConv_model
+    "DirGNN_GatConv_model": DirGNN_GatConv_model,
+    "SageGNN_model": SageGNN_model,
 }
 
 

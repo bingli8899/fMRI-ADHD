@@ -5,20 +5,47 @@ notes: |
   Using the new Fisher-Z transformation, well normalized data.   
 
 ### Model Settings
-model_name: "GCN_Model"
+model_name: "GCN_model"
 device: "cpu"
+
+run_inference_on_all_trainning: False # If true, the model will be evaluated on the whole trainning set to make inference
+stop_num_epochs: 70 # 60 -80 is typically good for running whole training set 
+
 model_params:
   in_channels: 200
   hidden_channels: 200
   out_channels: 200
   norm: "batch_norm"
   pooling_function: "global_mean_pool" 
+  loss_weights: [0.25, 0.25, 0.25, 0.25]
+  undirectional_graph: True
+  label_smoothing: 0.03
   # pooling function chosen from: global_mean_pool, global_add_pool, global_sort_pool, global_max_pool 
 predictor_paras: 
   norm_enabled: True # If add a normalization layer before predictor and model output from GCN 
   predictor_type: Linear
   num_pred_layers: 2 # Only this is hard coded for now 
   activation_btw_predictors: ReLU
+  num_pred_layers: 2
+  hidden_channels: 128
+  norm_enabled: False # If add a normalization layer before predictor and before adding to metadata 
+  norm_type: "batchnorm"  # or "layernorm"
+  norm_timing: "before_meta" # or after 
+  # If norm_timing is "before", then a normalization layer is appied before concating with metadata -> normalize only GCN output
+  # If norm_time is "after", then a normalization layer is applied after concating with metadata -> normlize everything 
+
+# Metadata processing 
+add_metadata: True
+metadata_MLP: True
+metada_MLP_out_channels: 64
+resampling_enabled: True
+
+# node features: 
+node_features: 
+  identity: False
+  correlation_matrix: True
+  masking: True
+  mask_prob: 0.05
 
 ### Data
 root_folder: "/u/b/i/bingl/private/fMRI-AHDH/data"
@@ -26,18 +53,16 @@ root_folder: "/u/b/i/bingl/private/fMRI-AHDH/data"
 add_metadata: True
 filter_top_fmri_columns: True
 num_top_fmri_columns: 100 # Okay, this need to think of 
-task: Four class classification
-
-### Optimizer
+task: "four"
 
 
 ### Hyperparameters
 num_folds: 5 # Cross validation
 lr: 0.001
-num_layers: 3
-dropout: 0.1
+num_layers: 1
+dropout: 0.3
 batch_size: 16
-num_epochs: 250
+num_epochs: 200
 master_seed: 3407
 patience: 20
 

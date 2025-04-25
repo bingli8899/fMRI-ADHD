@@ -476,9 +476,53 @@ def parse_txt_file(txt_file):
             i += 1
     return result # This is the model configuration to be used 
 
+def parse_txt_file_for_AdaBoost(txt_file):
+    result = []
+    with open(txt_file, "r") as f:
+        lines = f.readlines()
+
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+
+        if line.startswith("Rank"):
+            rank = int(re.findall(r"Rank (\d+):", line)[0])
+            model_line = lines[i + 1].strip()
+            model = re.findall(r"Model: (.+)", model_line)[0]
+
+            params_line_raw = lines[i + 2].strip().replace("Params: ", "")
+
+            # Convert DecisionTreeClassifier(...) to dictionary-like syntax
+            dtc_match = re.search(r"DecisionTreeClassifier\((.*?)\)", params_line_raw)
+            if dtc_match:
+                inside = dtc_match.group(1)
+                # Replace "=" with ":" for key-value pairs, but only outside braces
+                inside = re.sub(r"(\w+)=([^,]+)", r"'\1': \2", inside)
+                estimator_dict_str = "{" + inside + "}"
+                estimator_dict = ast.literal_eval(estimator_dict_str)
+                params_line_fixed = re.sub(r"DecisionTreeClassifier\(.*?\)", repr(estimator_dict), params_line_raw)
+            else:
+                params_line_fixed = params_line_raw
+
+            try:
+                params = ast.literal_eval(params_line_fixed)
+            except Exception as e:
+                raise ValueError(f"Failed to parse params on Rank {rank}:\n{params_line_fixed}\nError: {e}")
+
+            result.append((rank, model, params))
+            i += 4
+        else:
+            i += 1
+
+    return result
+
+
 def run_inference_from_txt(txt_file, X_train, y_train, X_test, test_participant_ids, task, output_name, output_dir): 
     
-    top_models = parse_txt_file(txt_file) 
+    if "AdaBoost" in output_name: 
+        top_models = parse_txt_file_for_AdaBoost(txt_file)
+    else: 
+        top_models = parse_txt_file(txt_file) 
 
     for rank, model_name, params in top_models:
         print(f"Rank {rank} | Model: {model_name}")
@@ -509,6 +553,11 @@ def run_inference_from_txt(txt_file, X_train, y_train, X_test, test_participant_
             raise ValueError(f"Unsupported model: {model_name}")
 
         model_class = model_class_map[model_name]
+
+        if model_name == "AdaBoost" and isinstance(params.get("estimator"), dict):
+                base_estimator = DecisionTreeClassifier(**params["estimator"])
+                params["estimator"] = base_estimator
+
         clf = model_class(**params)
 
         clf.fit(X_train, y_train)
