@@ -150,8 +150,8 @@ def create_graph_lst(fmri, config, participant_ids, label = None):
     return graph_lst 
 
 
-def make_lovely_unidirectional_matrix(fmri_row, pos = True): 
-    """Helper function to make unidirectional graphs"""
+def make_lovely_undirectional_matrix(fmri_row, pos = True): 
+    """Helper function to make undirectional graphs"""
     m = np.zeros((200,200))
     for col_name, val in fmri_row.items(): 
         if col_name == "participant_id": 
@@ -168,8 +168,8 @@ def make_lovely_unidirectional_matrix(fmri_row, pos = True):
             
     return m 
 
-def create_unidirectional_graph_lst(fmri, config, participant_ids, label = None): 
-    """Make two unidirectional graph (positive and negative) stored in two graph lists"""
+def create_undirectional_graph_lst(fmri, config, participant_ids, label = None): 
+    """Make two undirectional graph (positive and negative) stored in two graph lists"""
 
     graph_lst_pos, graph_lst_neg = [],[] 
     graph_num, node_num = len(fmri), 200 # 200 is hard-coded 
@@ -177,12 +177,12 @@ def create_unidirectional_graph_lst(fmri, config, participant_ids, label = None)
     # fmri_connect = fmri.drop(columns = "participant_id")
     # cont_matrix = th.tensor(fmri_connect.values).float() 
 
-    print("Begin loading patient data ... Making unidirectional graphs")
+    print("Begin loading patient data ... Making undirectional graphs")
     for i in tqdm(range(graph_num)): 
         
         # Use the correlation for each node as the node feature: 
         if config.node_features.correlation_matrix: 
-            matrix = make_lovely_unidirectional_matrix(fmri.iloc[i,:])
+            matrix = make_lovely_undirectional_matrix(fmri.iloc[i,:])
             matrix_tensor = th.tensor(matrix).float()
 
             # Mask node features to prevent overfitting if needed: 
@@ -195,8 +195,8 @@ def create_unidirectional_graph_lst(fmri, config, participant_ids, label = None)
         elif config.node_features.identity: 
             x = th.eye(node_num) 
         
-        matrix_pos = make_lovely_unidirectional_matrix(fmri.iloc[i,:])
-        matrix_neg = make_lovely_unidirectional_matrix(fmri.iloc[i,:], pos = False)
+        matrix_pos = make_lovely_undirectional_matrix(fmri.iloc[i,:])
+        matrix_neg = make_lovely_undirectional_matrix(fmri.iloc[i,:], pos = False)
 
         # create positive graphs 
         edge_inx_pos = matrix_pos.nonzero()
@@ -226,16 +226,16 @@ def create_unidirectional_graph_lst(fmri, config, participant_ids, label = None)
     return graph_lst_pos, graph_lst_neg
 
     
-def train(model, optimizer, criterion, train_loader = None, unidirectional = False, train_loader_pos = None, train_loader_neg = None): 
+def train(model, optimizer, criterion, train_loader = None, undirectional = False, train_loader_pos = None, train_loader_neg = None): 
 
     # This below line needs to be checked: 
-    if not train_loader and not unidirectional: 
+    if not train_loader and not undirectional: 
         raise ValueError("Something is wrong with train data loading") 
 
     model.train() 
     total_loss, total_samples, correct = 0, 0, 0
 
-    if not unidirectional: 
+    if not undirectional: 
         for data in tqdm(train_loader): 
             optimizer.zero_grad() 
             out = model(data)
@@ -271,15 +271,15 @@ def train(model, optimizer, criterion, train_loader = None, unidirectional = Fal
 
     return train_loss, train_accuracy 
 
-def validate(model, criterion, val_loader = None, unidirectional = False, val_loader_pos = None, val_loader_neg = None): 
+def validate(model, criterion, val_loader = None, undirectional = False, val_loader_pos = None, val_loader_neg = None): 
 
-    if not val_loader and not unidirectional: 
+    if not val_loader and not undirectional: 
         raise ValueError("Something is wrong with validation data loading") 
 
     model.eval()
     total_loss, correct, total_samples = 0, 0, 0 
 
-    if not unidirectional: 
+    if not undirectional: 
         with th.no_grad():  
             for data in val_loader:
                 out = model(data) 
@@ -313,8 +313,8 @@ def add_metadata_to_graph_lst(graph_lst, config):
     
     rootfolder = config.root_folder 
     sys.path.append(os.path.join(rootfolder))
-    datafolder = os.path.join(rootfolder, "data")
-    
+    # datafolder = os.path.join(rootfolder, "data")
+    datafolder = rootfolder
     pickle_file = os.path.join(datafolder, "data.pkl") 
     train_data_dic, test_data_dic = load_or_cache_data(datafolder, pickle_file)
     
@@ -492,12 +492,12 @@ def cross_validation(model, train_fmri, train_outcomes, config, time_string):
             val_loader = DataLoader(graph_lst_val, batch_size=config.batch_size, shuffle=True)
 
         else: 
-            graph_lst_train_pos, graph_lst_train_neg = create_unidirectional_graph_lst(
+            graph_lst_train_pos, graph_lst_train_neg = create_undirectional_graph_lst(
                 fmri = train_fmri_unbalanced, 
                 config = config, 
                 participant_ids = train_participant_ids, 
                 label = train_label_tensor)
-            graph_lst_val_pos, graph_lst_val_neg = create_unidirectional_graph_lst(
+            graph_lst_val_pos, graph_lst_val_neg = create_undirectional_graph_lst(
                     fmri = val_fmri, 
                     config = config,
                     participant_ids = val_participant_ids, 
@@ -536,24 +536,24 @@ def cross_validation(model, train_fmri, train_outcomes, config, time_string):
             if config.model_name != "GCN_model" or not config.model_params.undirectional_graph: 
                 train_loss, train_accuracy = train(model = model, criterion = criterion, optimizer = optimizer, 
                                                    train_loader = train_loader, 
-                                                   unidirectional= False, 
+                                                   undirectional= False, 
                                                    train_loader_pos = None, train_loader_neg = None)
 
                 val_loss, val_accuracy = validate(model = model, criterion = criterion, val_loader = val_loader, 
-                                                  unidirectional = False, 
+                                                  undirectional = False, 
                                                   val_loader_pos = None, val_loader_neg = None)
                 
             elif config.model_name == "GCN_model" and config.model_params.undirectional_graph: 
                 train_loss, train_accuracy = train(model = model, optimizer = optimizer, criterion = criterion,
-                                                    train_loader = None, unidirectional = True, 
+                                                    train_loader = None, undirectional = True, 
                                                     train_loader_pos = train_loader_pos, 
                                                     train_loader_neg = train_loader_neg)
                 val_loss, val_accuracy = validate(model = model, criterion = criterion, val_loader = None, 
-                                                  unidirectional = True, 
+                                                  undirectional = True, 
                                                   val_loader_pos = val_loader_pos, 
                                                   val_loader_neg = val_loader_neg)
             else: 
-                raise ValueError("Something is wrong with model setting. R u using GCN? R u using unidirectional?")
+                raise ValueError("Something is wrong with model setting. R u using GCN? R u using undirectional?")
             
             scheduler.step(val_loss) 
             updated_lr = optimizer.param_groups[0]['lr'] 
@@ -606,12 +606,151 @@ def cross_validation(model, train_fmri, train_outcomes, config, time_string):
         
     return log_messages 
 
+
+def run_training_NO_CV(model, train_fmri, train_outcomes, config, time_string): 
+
+    # kfold = KFold(n_splits = config.num_folds, shuffle=True, random_state=config.master_seed)
+    log_messages = [] 
+    
+    para_message = (f"""
+        Model: {config.model_name},
+        Initial Learning Rate: {config.lr},
+        {config.num_folds} fold cross validation each with {config.num_epochs} epochs
+        Batch size {config.batch_size}, 
+        Master seed: {config.master_seed},
+        With metadata: {config.add_metadata}, 
+        Unidirectional graph: {config.model_params.undirectional_graph}
+        """)
+
+    if config.model_name == "DirGNN_GatConv_model": 
+        model_specific_message = (f"""
+            # DirGNN-GATv2 specific parameters: 
+            num_layers_GATv2: {config.model_params.num_layers_GATv2},
+            num_layers_DirGNN: {config.model_params.num_layers_DirGNN},
+            """)
+
+    if config.run_inference_on_all_trainning: 
+        print("Run inference on all trainning data ...")
+
+    print(para_message)
+    log_messages.append(para_message)
+
+    # Set up models 
+    best_model_buffer = io.BytesIO() 
+    model_class = name_to_model.get(config.model_name)  
+    model = model_class(config)
+    optimizer = th.optim.Adam(model.parameters(), lr = config.lr)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5, verbose=True)
+    loss_weights = th.tensor(config.model_params.loss_weights, dtype = th.float) 
+    criterion = th.nn.CrossEntropyLoss(weight=loss_weights, 
+    label_smoothing = config.model_params.label_smoothing) 
+
+    train_fmri_preprocessed, train_label, all_participant_ids = preprocess_dataset(
+                fmri_data = train_fmri, 
+                config = config, 
+                fmri_outcomes = train_outcomes, 
+                time_string = time_string) 
+    train_label_tensor = th.tensor(train_label.to_numpy(dtype=np.int16), dtype=th.long) 
+
+    # create graph lst for train and validation set separately: 
+    if not config.model_params.undirectional_graph: 
+        graph_lst_train = create_graph_lst(fmri = train_fmri_preprocessed, 
+                                            config = config,
+                                            participant_ids = all_participant_ids, 
+                                            label = train_label_tensor)
+    
+        if config.resampling_enabled:
+            graph_lst_train = balancing_trainning_graph_lst(graph_lst_train)
+        if config.add_metadata:
+            add_metadata_to_graph_lst(graph_lst_train, config)
+    
+        train_loader = DataLoader(graph_lst_train, batch_size=config.batch_size, shuffle=True)
+
+    else: 
+        graph_lst_train_pos, graph_lst_train_neg = create_undirectional_graph_lst(
+                fmri = train_fmri_preprocessed, 
+                config = config, 
+                participant_ids = all_participant_ids, 
+                label = train_label_tensor)
+   
+        if config.resampling_enabled: 
+            graph_lst_train_pos = balancing_trainning_graph_lst(graph_lst_train_pos)
+            graph_lst_train_neg = balancing_trainning_graph_lst(graph_lst_train_neg)
+                
+        if config.add_metadata:
+            add_metadata_to_graph_lst(graph_lst_train_pos, config)
+            add_metadata_to_graph_lst(graph_lst_train_neg, config)
+
+            train_loader_pos = DataLoader(graph_lst_train_pos, batch_size=config.batch_size, shuffle=True)
+            train_loader_neg = DataLoader(graph_lst_train_neg, batch_size=config.batch_size, shuffle=True)
+    
+    message0 = f"Start training on the whole training data, no fold"
+    log_messages.append(message0)
+
+    print("Finish processing data... Upload to W&B ...")
+
+    if config.wandb.enabled: 
+        run = wandb.init(
+            project=config.wandb.project,
+            group=f"{config.model_name}-{config.task}-{time_string}",
+            config=config
+        ) 
+
+        for epoch in range(config.stop_num_epochs):
+
+            if config.model_name != "GCN_model" or not config.model_params.undirectional_graph: 
+                train_loss, train_accuracy = train(model = model, 
+                                                criterion = criterion, 
+                                                optimizer = optimizer, 
+                                                train_loader = train_loader, 
+                                                undirectional= False, 
+                                                train_loader_pos = None, train_loader_neg = None)
+                
+            elif config.model_name == "GCN_model" and config.model_params.undirectional_graph: 
+                train_loss, train_accuracy = train(model = model, optimizer = optimizer, criterion = criterion,
+                                                    train_loader = None, undirectional = True, 
+                                                    train_loader_pos = train_loader_pos, 
+                                                    train_loader_neg = train_loader_neg)
+            else: 
+                raise ValueError("Something is wrong with model setting. R u using GCN? R u using undirectional?")
+            
+            scheduler.step(train_loss) # learning rate scheduler on the train loss 
+            updated_lr = optimizer.param_groups[0]['lr'] 
+
+            message1 = f"Epoch: {epoch}, Train Loss: {train_loss:.4f}, Train Accuracy: {train_accuracy:.2f}%, Updated Learning Rate: {updated_lr}"
+            print(message1)
+            log_messages.append(message1)
+
+            if config.wandb.enabled:
+                run.log({"train_acc": train_accuracy,
+                        "train_loss": train_loss,
+                        "current_learning_rate": updated_lr})
+        
+        if config.wandb.enabled:
+            run.finish()
+
+    best_model_buffer.seek(0)
+    with open(os.path.join(config.checkpoint_dir, config.model_name, time_string, "checkpoint.pth"), "wb") as f:
+        f.write(best_model_buffer.read())
+    
+    with open(os.path.join(config.checkpoint_dir, config.model_name, time_string, "train_params.yaml"), "w") as f:
+        saved_config = namespace_to_dict(config)
+        yaml.dump(saved_config, f, default_flow_style=False, sort_keys=False)
+
+    logfile = os.path.join(config.checkpoint_dir, config.model_name, time_string, "log.txt")
+    with open(logfile, "w") as f:
+        f.write("\n".join(log_messages) + "\n")
+        
+    return log_messages 
+
+
 def run_inference(data, path_to_checkpoint_folder):
+
     with open(os.path.join(path_to_checkpoint_folder, "train_params.yaml"), "r") as file:
         config = yaml.safe_load(file)
         
     config = dict_to_namespace(config)
-    model_class = name_to_model.get(config.model_name, "GCN_Model")  # Safely get class reference
+    model_class = name_to_model.get(config.model_name, "GCN_model")  # Safely get class reference
     model = model_class(config)
     
     model.load_state_dict(th.load(os.path.join(path_to_checkpoint_folder, "checkpoint.pth")))
@@ -659,14 +798,14 @@ def check_config_files(config):
         raise ValueError("U idiot, change loss weights or check config.tasks!")
     
     if config.model_name != "GCN_model" and config.model_params.undirectional_graph: 
-        raise ValueError("R u sure u want to use unidirectional graphs for non-GCN models?") 
+        raise ValueError("R u sure u want to use undirectional graphs for non-GCN models?") 
     
     if config.model_name == "GCN_model" and not config.model_params.undirectional_graph: 
-        raise ValueError("R u sure you dont want to use unidiretcional graohs for GCN model?")
+        raise ValueError("R u sure you dont want to use undirectional graohs for GCN model?")
     
-    if config.predictor_paras.norm_enabled: 
-        if config.predictor_paras.norm_timing != "before" or config.predictor_paras.norm_timing != "after": 
-            raise ValueError("R need to specify a correct normalization timing -> before or after the linear projectors?")
+    # if config.predictor_paras.norm_enabled: 
+    #     if config.predictor_paras.norm_timing != "before" or config.predictor_paras.norm_timing != "after": 
+    #         raise ValueError("R need to specify a correct normalization timing -> before or after the linear projectors?")
     
     if not (config.node_features.identity or config.node_features.correlation_matrix):
         raise ValueError("C’mon... you gotta use at least one type of node feature :(")
@@ -725,7 +864,12 @@ def main(args):
         data_mri = train_data_dic[f"train_fmri"] 
 
         print(f"Starting {config.num_folds} fold cross-validation...")
-        cross_validation(config.model_name, data_mri, data_outcome, config, time_string)
+
+        if not config.run_inference_on_all_trainning: 
+            cross_validation(config.model_name, data_mri, data_outcome, config, time_string)
+        else:
+            print(f"Run training on the whole training set with fold = {config.num_folds}")
+            run_training_NO_CV(config.model_name, data_mri, data_outcome, config, time_string)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

@@ -2,48 +2,35 @@ import torch
 from torch_geometric.nn import GCN, global_mean_pool, global_add_pool, global_sort_pool, global_max_pool
 from torch_geometric.nn.pool import SAGPooling, EdgePooling, ASAPooling, PANPooling, MemPooling 
 from torch.nn import Module, ReLU, LayerNorm, Dropout, BatchNorm1d, Linear
-from torch_geometric.nn import Sequential, GATv2Conv
+from torch_geometric.nn import Sequential, SAGEConv 
 from src.utility.ut_model import name_to_pooling, name_to_predictor, name_to_activation 
 from torch_geometric.nn import SAGPooling, EdgePooling, GlobalAttention
 from torch.nn import Sequential as Seq
 
 
-class GATv2Conv_Model(Module):
+class SageGNN_model(Module):
 
     def __init__(self, config): 
 
-        super(GATv2Conv_Model, self).__init__()
+        super(SageGNN_model, self).__init__()
         self.config = config  
 
+        out_dim = config.model_params.out_channels 
+
         # Depending on the performance, think of kwargs later 
-        self.GATconv1 = GATv2Conv(in_channels = config.model_params.in_channels,
-                             out_channels = config.model_params.out_channels,
-                             heads = config.model_params.heads, 
-                             # concate = config.model_params.concate, 
-                             # negative_slope = config.model_parmas.activation_slope,
-                             dropout = config.dropout,
-                             edge_dim = 1, 
-                             fill_value = 1.0, 
-                             # residual = True, 
-                             # kwargs = config.model_params.message_passing
+        self.SAGEconv1 = SAGEConv(in_channels = config.model_params.in_channels,
+                             out_channels = out_dim,
+                             aggr = config.model_params.aggr,
+                             normalize = config.model_params.normalize, 
+                             project = config.model_params.project
                              ).to(config.device) 
         
-        # self.GATconv2 = GATv2Conv(in_channels = config.model_params.hidden_channels * config.model_params.heads,
-        #                      out_channels = config.model_params.out_channels,
-        #                      heads = config.model_params.heads, 
-        #                      # concate = config.model_params.concate, 
-        #                      # negative_slope = config.model_parmas.activation_slope,
-        #                      dropout = config.dropout,
-        #                      edge_dim = 1, 
-        #                      fill_value = 1.0, 
-        #                      # residual = True, 
-        #                      # kwargs = config.model_params.message_passing
+        # self.SAGEconv2 = SAGEConv(in_channels = config.model_params.in_channels,
+        #                      out_channels = out_dim,
+        #                      aggr = "mean",
+        #                      normalize = False, # change later 
+        #                      project = False, # change later 
         #                      ).to(config.device) 
-        
-        # if config.model_params.residual_layer: 
-        #     self.res_proj1 = Linear(in_channels * heads, first_out_channels * heads) if hidden_channels * heads != out_channels * heads else None
-        
-        out_dim = config.model_params.out_channels * config.model_params.heads
 
         if config.model_params.use_attention_pool:
             self.pooling_function = GlobalAttention(
@@ -115,15 +102,15 @@ class GATv2Conv_Model(Module):
 
     def forward(self, data):
         
-        x, edge_index, edge_attr, batch = data.x, data.edge_index, data.edge_attr, data.batch
+        x, edge_index, batch = data.x, data.edge_index, data.batch
         x_original = x 
-        x = self.GATconv1(x, edge_index, edge_attr)  
+        x = self.SAGEconv1(x, edge_index)  
         if self.norm_1layer: 
             x = self.norm_1layer(x) 
         if self.residual_1layer: 
             x = x + self.residual_1layer(x_original)
         
-        # x = self.GATconv2(x, edge_index, edge_attr) 
+        # x = self.SAGEconv2(x, edge_index, edge_attr) 
         # if self.norm_2layer: 
         #     x = self.norm_2layer(x)
         # x = x + self.residual_2layer(x_original)

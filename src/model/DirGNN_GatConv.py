@@ -26,7 +26,8 @@ class DirGNN_GatConv_model(Module):
         input_dim = config.model_params.in_channels 
         for i in range(config.model_params.num_layers_DirGNN):
             hidden_dim = output_channels_DirGNN # let's use out_channels = hidden_channels now 
-            baseconv = GCNConv(input_dim, hidden_dim)
+            baseconv = GCNConv(input_dim, 
+                               hidden_dim)
             dir_layer = DirGNNConv(baseconv, config.model_params.alpha, root_weight=False)
             self.dirgnn_layers.append(dir_layer)
             input_dim = hidden_dim

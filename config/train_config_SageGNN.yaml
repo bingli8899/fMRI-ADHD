@@ -6,7 +6,7 @@ notes: |
   0.5 dropout with residuals
 
 ### Model Settings
-model_name: "GATv2_model"
+model_name: "SageGNN_model" # Choose from: GCN, GATv2, DirGNN, SAGE-GNN
 device: "cpu"
 
 run_inference_on_all_trainning: False # If true, the model will be evaluated on the whole trainning set to make inference
@@ -32,6 +32,10 @@ model_params:
   use_attention_pool: False
   batch_norm: False
   residual: True
+  # SAGEmodel specific: 
+  aggr: "mean" 
+  normalize: False 
+  project: False
 
 node_features: 
   identity: False
