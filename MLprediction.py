@@ -39,7 +39,7 @@ def choose_model_grid(model_name, class_weights_small_diff, class_weights_large_
                 "max_depth": [3, 5, 10],
                 "criterion": ["friedman_mse", "squared_error"], 
                 "subsample": [1.0, 0.8, 0.6], # default = 1.0
-                "max_features": ["sqrt", "log2", None], 
+                "max_features": ["sqrt", "log2"], 
                 "min_samples_split": [2, 5], 
                 "min_samples_leaf": [1, 2] 
             }}} 
