@@ -9,18 +9,15 @@ notes: |
 model_name: "SageGNN_model" # Choose from: GCN, GATv2, DirGNN, SAGE-GNN
 device: "cpu"
 
-run_inference_on_all_trainning: False # If true, the model will be evaluated on the whole trainning set to make inference
-stop_num_epochs: 70 # 60 -80 is typically good for running whole training set 
-
 model_params:
   in_channels: 200
-  hidden_channels: 128
+  hidden_channels: 64
   out_channels: 64
   norm: "batch_norm"
-  pooling_function: "global_mean_pool" 
+  pooling_function: "global_max_pool" 
   # pooling function chosen from: global_mean_pool, global_add_pool, global_sort_pool, global_max_pool 
-  loss_weights: [0.25, 0.25, 0.25, 0.25]
-  label_smoothing: 0.02
+  loss_weights: [0.5, 0.5]
+  label_smoothing: 0.05
   #DirGNNConv specific paras: 
   alpha: 0.5
   # GCN model specific: 
@@ -33,14 +30,14 @@ model_params:
   batch_norm: False
   residual: True
   # SAGEmodel specific: 
-  aggr: "mean" 
+  aggr: "max" 
   normalize: False 
   project: False
 
 node_features: 
   identity: False
   correlation_matrix: True
-  masking: False
+  masking: True
   mask_prob: 0.01
 
 predictor_paras: 
@@ -58,12 +55,12 @@ predictor_paras:
 root_folder: "/u/b/i/bingl/private/fMRI-AHDH/data"
 # root_folder: "C:\\Users\\tosso\\Documents\\widsdatathon2025"
 add_metadata: True
-metadata_MLP: True
+metadata_MLP: False
 metada_MLP_out_channels: 64
 resampling_enabled: True
 
 ### Classification type 
-task: four # adhd, four
+task: sex # adhd, four
 
 ### Optimizer
 
@@ -72,7 +69,7 @@ task: four # adhd, four
 num_folds: 5 # Cross validation
 lr: 0.0001
 num_layers: 1
-dropout: 0.1
+dropout: 0.3
 batch_size: 16
 master_seed: 3407
 patience: 20
@@ -88,3 +85,8 @@ checkpoint_dir: './checkpoints'
 wandb:
   enabled: True
   project: ADHD-fMRI
+
+# This below config is useless:
+# The code works but not that good. 
+run_inference_on_all_trainning: False # If true, the model will be evaluated on the whole trainning set to make inference
+stop_num_epochs: 70 # 60 -80 is typically good for running whole training set 

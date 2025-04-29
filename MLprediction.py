@@ -97,23 +97,38 @@ def choose_model_grid(model_name, class_weights_small_diff, class_weights_large_
                 "metric": ["minkowski", "euclidean", "manhattan"] 
             }}} 
     elif model_name == "SGDClassifier": 
-        model_grid = {    
-        "SGDClassifier": {
-        "model": SGDClassifier,
-        "param_grid": {
-                "loss": ["hinge", "log_loss", "modified_huber", "squared_hinge", "perceptron"], 
-                "penalty": ["l2", "l1", "elasticnet"],
-                "alpha": [0.0001, 0.001, 0.01],  # Regularization strength
-                "l1_ratio": [0.15, 0.25, 0.5, 0.75],  # Only used if penalty is elasticnet
-                "max_iter": [1000, 2000],
-                "tol": [1e-3, 1e-4],
-                "learning_rate": ["optimal", "invscaling", "adaptive"],
-                "eta0": [0.01, 0.1, 1.0],  # Initial learning rate
-                "early_stopping": [True],
-                "class_weight": [None, "balanced", class_weights_small_diff, class_weights_large_diff],
-                "random_state": [seed],
-                "n_jobs": [-1]  # This parameter is ignored by SGDClassifier, but harmless to include for consistency
-        }}}
+        if len(class_weights_small_diff) == 2:
+            model_grid = {    
+            "SGDClassifier": {
+            "model": SGDClassifier,
+            "param_grid": {
+                    "loss": ["hinge", "modified_huber", "squared_hinge", "perceptron"], # for four-class prediction
+                    # "loss": ["hinge", "modified_huber", "squared_hinge", "perceptron"], # for two class
+                    "penalty": ["l2", "l1", "elasticnet"],
+                    "alpha": [0.001, 0.001, 0.01],  # Regularization strength
+                    "l1_ratio": [0.15, 0.25, 0.5],  # Only used if penalty is elasticnet
+                    "eta0": [0.01],
+                    "learning_rate": ["optimal", "invscaling", "adaptive"],
+                    "early_stopping": [True],
+                    "class_weight": ["balanced", class_weights_small_diff, class_weights_large_diff],
+                    "random_state": [seed]
+            }}}
+        else: 
+            model_grid = {    
+            "SGDClassifier": {
+            "model": SGDClassifier,
+            "param_grid": {
+                    "loss": ["modified_huber", "log_loss"], # for four-class prediction
+                    # "loss": ["hinge", "modified_huber", "squared_hinge", "perceptron"], # for two class
+                    "penalty": ["l2", "l1", "elasticnet"],
+                    "alpha": [0.001, 0.001, 0.01],  # Regularization strength
+                    "l1_ratio": [0.15, 0.25, 0.5],  # Only used if penalty is elasticnet
+                    "eta0": [0.01], 
+                    "learning_rate": ["optimal", "invscaling", "adaptive"],
+                    "early_stopping": [True],
+                    "class_weight": ["balanced", class_weights_small_diff, class_weights_large_diff],
+                    "random_state": [seed]
+            }}}
     elif model_name == "LogisticRegression": 
         model_grid = {
         # ---------------Logistic Regression -------------------# 
@@ -174,13 +189,13 @@ def choose_model_grid(model_name, class_weights_small_diff, class_weights_large_
         "SVC": {
             "model": SVC,
             "param_grid": {
-                "C": [0.1, 0.5, 0.3, 1, 3, 5, 10],
+                "C": [0.1, 0.5, 0.3, 1, 3, 5],
                 "kernel": ['sigmoid', 'linear', 'rbf', 'poly'],
                 "gamma": ['scale', 'auto'],
-                "degree": [2, 3, 4, 5, 6],  # used only with 'poly' kernel
+                "degree": [2, 3, 4, 5],  # used only with 'poly' kernel
                 "probability": [True],
-                "coef0": [0.0, 0.25, 0.5, 0.75, 1, 3, 5],
-                "class_weight": [None, 'balanced', class_weights_small_diff, class_weights_large_diff],
+                "coef0": [0.0, 0.25, 0.5, 0.75, 1, 3],
+                "class_weight": ['balanced', class_weights_small_diff, class_weights_large_diff],
                 "decision_function_shape": ['ovo']
             }}}
     elif model_name == "NuSVM": 
@@ -188,17 +203,17 @@ def choose_model_grid(model_name, class_weights_small_diff, class_weights_large_
         "NuSVC": {
             "model": NuSVC,
             "param_grid": {
-                "nu": [0.01, 0.1, 0.25, 0.4, 0.5, 0.6, 0.75, 0.9, 0.99],
+                "nu": [0.1, 0.25, 0.5, 0.75, 0.8],
                 "kernel": ['sigmoid', 'linear', 'rbf', 'poly'],
                 "gamma": ['scale', 'auto'],
-                "degree": [2, 3, 4, 5, 6],
+                "degree": [2, 3, 4, 5],
                 "probability": [True],
-                "coef0": [0.0, 0.25, 0.5, 0.75, 1, 3, 5],
-                "class_weight": [None, 'balanced', class_weights_small_diff, class_weights_large_diff]
+                "coef0": [0.0, 0.25, 0.5, 0.75, 1],
+                "class_weight": ['balanced', class_weights_small_diff, class_weights_large_diff]
             }}}
     return model_grid
    
-def load_and_impute_data(datafolder, task, ida, mutual_info, enable_fmri, k, scaler, scaler_enabled = True, split = "train"):
+def load_and_impute_data(datafolder, task, ida, mutual_info, enable_fmri, k, scaler, adhd_prediction_file = None, scaler_enabled = True, split = "train"):
     pickle_file = os.path.join(datafolder, "data.pkl") 
     train_data_dic, test_data_dic = load_or_cache_data(datafolder, pickle_file)
 
@@ -220,6 +235,10 @@ def load_and_impute_data(datafolder, task, ida, mutual_info, enable_fmri, k, sca
 
     train_outcome = train_data_dic["train_outcome"].sort_values(by="participant_id")
     train_outcome_relabelled = relabel_train_outcome(train_outcome, task = task)["Label"]
+
+    if adhd_prediction_file is not None:
+        adhd_outcome = relabel_train_outcome(train_outcome, task = "adhd")["Label"]
+        # print("ADHD outcome for train: ", adhd_outcome)
 
     # De-bugging: 
     # print("Check the initial train_outcome and relabelled dataset")
@@ -341,13 +360,13 @@ def load_and_impute_data(datafolder, task, ida, mutual_info, enable_fmri, k, sca
                                                                         n_components= n_components)
 
             # de-bugging: 
-            print("train_fmri_selected after lda", train_fmri_selected)
-            print("test_fmri_selected after lda", test_fmri_selected)
+            # print("train_fmri_selected after lda", train_fmri_selected)
+            # print("test_fmri_selected after lda", test_fmri_selected)
 
             # Although these below have been sorted. Still sort again since I am scared now ... 
             train_fmri_selected_sorted = train_fmri_selected.sort_values(by = "participant_id").reset_index(drop=True)
             test_fmri_selected_sorted = test_fmri_selected.sort_values(by = "participant_id").reset_index(drop=True)
-            
+
             # drop participant_id again: 
             train_fmri_features = train_fmri_selected_sorted.drop(columns="participant_id")
             test_fmri_features = test_fmri_selected_sorted.drop(columns="participant_id")
@@ -365,6 +384,16 @@ def load_and_impute_data(datafolder, task, ida, mutual_info, enable_fmri, k, sca
         # print("train_fmri_features\n", train_fmri_features) 
         # print("test_fmri_features\n", test_fmri_features)
 
+        # if adhd_prediction_file is not None:
+        # add adhd outcome as a feature to the fmri dataset: 
+        if adhd_prediction_file: 
+            print("add_adhd_as_feature is set to true")
+            print("Adding ADHD outcome as a feature to the fmri dataset")
+            train_fmri_features = add_adhd_as_predict(train_fmri_features, y = adhd_outcome)
+            test_fmri_features = add_adhd_as_predict(test_fmri_features, adhd_file = adhd_prediction_file)   
+        else: 
+            print("add_adhd_as_feature is set to false, skipping adding adhd outcome as a feature")
+
         # Concatenate metadata + fMRI features
         X_train = pd.concat([train_meta_processed.reset_index(drop=True), train_fmri_features.reset_index(drop=True)], axis=1).values
         X_test = pd.concat([test_meta_processed.reset_index(drop=True), test_fmri_features.reset_index(drop=True)], axis=1).values
@@ -381,6 +410,27 @@ def load_and_impute_data(datafolder, task, ida, mutual_info, enable_fmri, k, sca
     # print("X_test final dataset: \n", X_test)
 
     return X_train, y_train, X_test, test_participant_ids
+
+# This function is used to add adhd outcome as a predicted function and then predict sex 
+def add_adhd_as_predict(X, y = None, adhd_file = None):
+    """Here X is the fmri +/- metadata and y is the adhd outcome
+    when y ois None then it is the testing 
+    When y is not None then it is the training"""
+
+    if y is None:
+        adhd_df = pd.read_csv(adhd_file, sep="\t")
+        adhd_df = adhd_df.sort_values(by="participant_id").reset_index(drop=True)
+        adhd_outcome = adhd_df['agg_ADHD_Outcome'].values
+        X_with_adhd = pd.concat([X, pd.Series(adhd_outcome, name='agg_ADHD_Outcome')], axis=1)
+
+        # de-bugging: 
+        # print("Test dataset with added adhd results", X_with_adhd)
+
+    else: 
+        X_with_adhd = pd.concat([X, y.reset_index(drop = True)], axis=1)
+        # print("Train dataset with added adhd results", X_with_adhd)
+    
+    return X_with_adhd
 
 def encode_column_into_bins(df, column, bins, labels):
         df['binned'] = pd.cut(df[column], bins=bins, labels=labels, right=True)
@@ -619,6 +669,11 @@ def main(args):
     aggregate_inference = config.output_params.aggregate_inference
     ida = config.data_preparation.ida
     mutual_info = config.data_preparation.mutual_info
+    add_adhd_as_feature = config.Additional_feature_to_predict_sex.add_adhd_as_feature
+    adhd_prediction_file = config.Additional_feature_to_predict_sex.adhd_prediction_file if add_adhd_as_feature else None 
+
+    if add_adhd_as_feature and task != "sex": 
+        raise ValueError("Hi if u want to add adhd as a feature, then the task shoule be sex :-(")
 
     # mutual_info and ida cannot be true at the same time: 
     if mutual_info and ida:
@@ -627,10 +682,16 @@ def main(args):
     if config.data_preparation.enable_fmri: 
         if mutual_info: 
             output_name = f"{model_name}-{task}Predic-MutualIndo-top{k}fmri"
+            if add_adhd_as_feature: 
+                output_name = f"{model_name}-{task}Predic-ADHDasFtr-MutualIndo-top{k}fmri"
         else: #ida 
             output_name = f"{model_name}-{task}Predic-ida"
+            if add_adhd_as_feature: 
+                output_name = f"{model_name}-{task}Predic-ADHDasFtr-ida"
     else: 
         output_name = f"{model_name}-{task}Predic-NOfmri"
+        # I decided to not run Nofmri with adhd as a feature 
+
 
     if config.output_params.task == "four": 
         # four class prediction use string "0", "1", "2", "3"
@@ -655,6 +716,7 @@ def main(args):
                                                                           enable_fmri = enable_fmri, 
                                                                           k = k, 
                                                                           scaler = scaler, 
+                                                                          adhd_prediction_file = adhd_prediction_file,
                                                                           scaler_enabled = True)
 
     # de-bugging: 

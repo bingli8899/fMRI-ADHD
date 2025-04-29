@@ -1,5 +1,5 @@
 import torch 
-from torch_geometric.nn import GCN, global_mean_pool, global_add_pool, global_sort_pool, global_max_pool
+from torch_geometric.nn import GCN, global_mean_pool, global_add_pool, global_sort_pool, global_max_pool, BatchNorm
 from torch_geometric.nn.pool import SAGPooling, EdgePooling, ASAPooling, PANPooling, MemPooling 
 from torch.nn import Linear, Module, ReLU, LayerNorm, Dropout
 from torch_geometric.nn import Sequential, TransformerConv
@@ -19,16 +19,18 @@ class TransformerConv_Model(Module):
                              dropout = config.dropout,
                              edge_dim = 1, 
                              # kwargs = config.model_params.message_passing
-                             aggr = "mean"
+                             aggr = "max"
                              ).to(config.device) 
         
         self.pooling_function = name_to_pooling.get(config.model_params.pooling_function) 
         predictor_function = name_to_predictor.get(config.predictor_paras.predictor_type)
 
-        if self.config.predictor_paras.norm_enabled:
-            self.norm = BatchNorm(config.model_params.out_channels) # This should not be hard-coded 
+        output_dim = config.model_params.out_channels * config.model_params.heads 
 
-        predict_input_shape = config.model_params.out_channels + 81 if self.config.add_metadata else config.model_params.out_channels 
+        if self.config.predictor_paras.norm_enabled:
+            self.norm = BatchNorm(output_dim) # This should not be hard-coded 
+
+        predict_input_shape = output_dim + 81 if self.config.add_metadata else output_dim
         
         self.projector1 = predictor_function(predict_input_shape, 128)
         self.projector2 = predictor_function(128, len(config.model_params.loss_weights)) 

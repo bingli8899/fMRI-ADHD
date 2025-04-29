@@ -19,7 +19,7 @@ model_params:
   norm: "batch_norm"
   pooling_function: "global_mean_pool" 
   # pooling function chosen from: global_mean_pool, global_add_pool, global_sort_pool, global_max_pool 
-  loss_weights: [0.25, 0.25, 0.25, 0.25]
+  loss_weights: [0.5, 0.5] # [0.25, 0.25, 0.25, 0.25] # [0.5, 0.5]
   label_smoothing: 0.02
   #DirGNNConv specific paras: 
   alpha: 0.5
@@ -31,7 +31,7 @@ model_params:
   drop_out_GAT: 0.5
   use_attention_pool: False
   batch_norm: False
-  residual: True
+  residual: False
 
 node_features: 
   identity: False
@@ -59,7 +59,7 @@ metada_MLP_out_channels: 64
 resampling_enabled: True
 
 ### Classification type 
-task: four # adhd, four
+task: sex # adhd, four
 
 ### Optimizer
 

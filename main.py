@@ -214,7 +214,7 @@ def create_undirectional_graph_lst(fmri, config, participant_ids, label = None):
         edge_inx_neg = [[edge_inx_neg[0][i], edge_inx_neg[1][i]] for i in range(len(edge_inx_neg[0]))]
         edge_attr_neg = th.FloatTensor([matrix_neg[idx[0], idx[1]] for idx in edge_inx_neg])
 
-        graph_data_neg = Data(x = matrix_tensor.clone(), 
+        graph_data_neg = Data(x = x.clone(), 
                           edge_index = th.LongTensor(edge_inx_neg).transpose(1,0), 
                           edge_attr = edge_attr_neg.clone().detach(), 
                           y = label[i] if label is not None else None, 
@@ -744,23 +744,31 @@ def run_training_NO_CV(model, train_fmri, train_outcomes, config, time_string):
     return log_messages 
 
 
-def run_inference(data, path_to_checkpoint_folder):
+def run_inference(data, config):
+
+    path_to_checkpoint_folder = config.path_to_checkpoint_folder
+    output_folder = config.output_folder
+    os.makedirs(output_folder, exist_ok=True)
 
     with open(os.path.join(path_to_checkpoint_folder, "train_params.yaml"), "r") as file:
         config = yaml.safe_load(file)
         
     config = dict_to_namespace(config)
-    model_class = name_to_model.get(config.model_name, "GCN_model")  # Safely get class reference
+    model_class = name_to_model.get(config.model_name)  # Safely get class reference
     model = model_class(config)
+
+    print(f"model class = {model}")
     
     model.load_state_dict(th.load(os.path.join(path_to_checkpoint_folder, "checkpoint.pth")))
     model.eval()
     
     test_loader = DataLoader(data, batch_size=config.batch_size, shuffle=True)
-    
+    output_name = f"final_predictions_{config.model_name}_{config.task}.csv"
+    output_path = os.path.join(output_folder, output_name)
+
     if config.task.lower() == "four": 
-        with open(os.path.join(path_to_checkpoint_folder, "final_predictions.csv"), "w") as f:
-            f.write("participant_id,ADHD_Outcome,Sex_F\n")
+        with open(output_path, "w") as f:
+            f.write("participant_id\tADHD_Outcome\tSex_F\n")
             result_string = ""
             with th.no_grad():  
                 for data in tqdm(test_loader):
@@ -768,28 +776,47 @@ def run_inference(data, path_to_checkpoint_folder):
                     predictions = out.argmax(dim=1)
                     for i in range(len(predictions)):
                         ADHD_outcome, Sex_F = recover_original_label(predictions[i])
-                        result_string += f"{data.participant_id[i]},\t{ADHD_outcome},\t{Sex_F}\n"
+                        result_string += f"{data.participant_id[i]}\t{ADHD_outcome}\t{Sex_F}\n"
             f.write(result_string[:-1]) # Remove last newline
     
     # Two class predictions: 
     else: 
-        with open(os.path.join(path_to_checkpoint_folder, f"final_predictions_{config.task}.csv"), "w") as f:
-            f.write(f"participant_id,{config.task}\n")
+        with open(output_path, "w") as f:
+
+            if config.task.lower() == "adhd": 
+                f.write(f"participant_id\tADHD_outcome\n")
+            elif config.task.lower() == "sex": 
+                f.write(f"participant_id\tSex_F\n")
+            else: 
+                print("Hi there must be something wrong in your task setup. CHECK!")
+
             result_string = ""
+
             with th.no_grad():  
                 for data in tqdm(test_loader):
                     out = model(data) 
                     predictions = out.argmax(dim=1)
 
-                    if config.task == "adhd": 
+                    if config.task.lower() == "adhd": 
                         for i in range(len(predictions)):
-                            result_string += f"{data.participant_id[i]},\t{ADHD_outcome}\n"
-                    else: # config.task == "sex" 
+                            participant_id = data.participant_id[i]
+                            ADHD_outcome = predictions[i].item()
+                            result_string += f"{participant_id}\t{ADHD_outcome}\n"
+                    elif config.task.lower()  == "sex": 
                         for i in range(len(predictions)):
-                            result_string += f"{data.participant_id[i]},\t{Sex_F}\n"
+                            participant_id = data.participant_id[i]
+                            Sex_F = predictions[i].item()
+                            result_string += f"{participant_id}\t{Sex_F}\n"
+                    else: 
+                        print("Hi there must be something wrong in your task setup. CHECK!")
                             
             f.write(result_string[:-1]) # Remove last newline
-
+    
+    # Reload and save the df based on sorted participant_id
+    df = pd.read_csv(output_path, sep="\t", engine="python")
+    df = df.sort_values(by="participant_id")
+    print(df)
+    df.to_csv(output_path, sep="\t", index=False)
 
 def check_config_files(config): 
     """A group to make sure the configuration files parameters are compatible"""
@@ -823,8 +850,6 @@ def main(args):
         config = yaml.safe_load(file)
 
     config = dict_to_namespace(config)
-
-    check_config_files(config)
     
     # Data and function loading: 
     rootfolder = config.root_folder # change this
@@ -851,10 +876,11 @@ def main(args):
             add_metadata_to_graph_lst(graph_lst_test, config)
 
         print(f"Starting inference...")
-        run_inference(graph_lst_test, config.path_to_checkpoint_folder)
+        run_inference(graph_lst_test, config)
 
     elif args.train_config:
 
+        check_config_files(config)
         # Make the output dir first
         os.makedirs(os.path.join(config.checkpoint_dir, config.model_name, time_string), exist_ok=True)
         

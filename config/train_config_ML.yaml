@@ -15,18 +15,23 @@ data_preparation:
   # Below are parameters for IDA: 
   ida: True # when this is true, mutual_info must be set to false 
   # params should not be changed: 
-  scaler_enabled: True # This should always be true -> Dont change
+  scaler_enabled: True # This should always be true -> Dont change 
   scaler: "StandardScaler" # dont change this 
 
+Additional_feature_to_predict_sex: 
+  add_adhd_as_feature: True 
+  adhd_prediction_file: "/u/b/i/bingl/private/fMRI-AHDH/ML_inference/final_predictions_RandomForest-adhdPredic-ida.csv"
+  # The file above could only be the ADHD only prediction file
+
 output_params: 
-  task: "four" # "four", "adhd", "sex"  
+  task: "sex" # "four", "adhd", "sex"  
   training_enabled: True
   run_inference_on_test: True 
   aggregate_inference: True # Always set to true 
   output_inference_dir: "/u/b/i/bingl/private/fMRI-AHDH/ML_inference"
 
 model_params: # Chose from the below model_name, unless testing for errors then no need to use "testing"
-  model_name: "AdaBoost" # "LogisticRegression", "GradientBoosting", "AdaBoost", "RandomForest", "KNN", "SGDClassifier", "tesing", "SVM", "NuSMV"
+  model_name: "SVM" # "LogisticRegression", "GradientBoosting", "AdaBoost", "RandomForest", "KNN", "SGDClassifier", "tesing", "SVM", "NuSMV"
   seed: 3407 # no need to change
   num_folds: 5 # no need to change
 
