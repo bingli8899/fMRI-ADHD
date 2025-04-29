@@ -5,15 +5,18 @@ notes: |
 model_name: "DirGNN_GatConv_model"
 device: "cpu"
 
+run_inference_on_all_trainning: False # If true, the model will be evaluated on the whole trainning set to make inference
+stop_num_epochs: 70 # 60 -80 is typically good for running whole training set 
+
 model_params:
   in_channels: 200
   # hidden_channels: 200
   # out_channels: 200
   norm: "batch_norm"
-  pooling_function: "global_mean_pool" 
+  pooling_function: "global_max_pool" 
   activation_btw_conv: ReLU
   # pooling function chosen from: global_mean_pool, global_add_pool, global_sort_pool, global_max_pool 
-  loss_weights: [0.25, 0.25, 0.25, 0.25]
+  loss_weights: [0.5, 0.5] # [0.25, 0.25, 0.25, 0.25]
   label_smoothing: 0.02
   #DirGNNConv specific paras: 
   alpha: 0.5
@@ -23,11 +26,11 @@ model_params:
   heads: 4
   use_attention_pool: True
   pooling_function_DirGNN: "global_max_pool"
-  pooling_function_GATv2: "global_mean_pool" # if use_attention_pool is true, then this doesn't matter 
+  pooling_function_GATv2: "global_max_pool" # if use_attention_pool is true, then this doesn't matter 
   out_channels_DirGNN: 200
   output_channels_GATv2: 100
   num_layers_GATv2: 1
-  num_layers_DirGNN: 3
+  num_layers_DirGNN: 2
   dropout_DirGNN: 0.3
   dropout_GATv2: 0.5
 
@@ -55,7 +58,7 @@ add_metadata: True
 resampling_enabled: True
 
 ### Classification type 
-task: four # adhd, four
+task: sex # adhd, four
 
 ### Optimizer
 

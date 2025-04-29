@@ -1,12 +1,19 @@
 ### Model Settings
-path_to_checkpoint_folder: "/u/b/i/bingl/private/fMRI-AHDH/checkpoints/GCN_Model/2025-03-21-07-53-24"
+path_to_checkpoint_folder: "/u/b/i/bingl/private/fMRI-AHDH/checkpoints/GATv2_model/2025-04-28-21-20-51"
+output_folder: "/u/b/i/bingl/private/fMRI-AHDH/GNN_inference"
 
 ### Data
 root_folder: "/u/b/i/bingl/private/fMRI-AHDH/data"
 add_metadata: True
-task: Four class classification
+task: ”adhd“ # This needs to be carefully checked each time 
 
 ### scaler: 
 scaling:
   enabled: True
   scaler: "MeanStd"
+
+node_features: 
+  identity: False
+  correlation_matrix: True
+  masking: False
+  mask_prob: 0.0

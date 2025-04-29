@@ -5,12 +5,15 @@ notes: |
 model_name: "TransConv_model"
 device: "cpu"
 
+run_inference_on_all_trainning: False # If true, the model will be evaluated on the whole trainning set to make inference
+stop_num_epochs: 70 # 60 -80 is typically good for running whole training set 
+
 model_params:
   in_channels: 200
-  hidden_channels: 200
-  out_channels: 200
+  hidden_channels: 128
+  out_channels: 128
   norm: "batch_norm"
-  pooling_function: "global_mean_pool" 
+  pooling_function: "global_max_pool" 
   # pooling function chosen from: global_mean_pool, global_add_pool, global_sort_pool, global_max_pool 
   loss_weights: [0.5, 0.5]
   label_smoothing: 0.01
@@ -19,12 +22,12 @@ model_params:
   # GCN model specific: 
   undirectional_graph: False
   # GATv2model specific and TransformConv model
-  heads: 1
+  heads: 4
   concate: True
 
 node_features: 
-  identity: False
-  correlation_matrix: True
+  identity: True
+  correlation_matrix: False
   masking: False
   mask_prob: 0.01
 

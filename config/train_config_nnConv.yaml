@@ -5,6 +5,9 @@ notes: |
   Normalization layer before linear projector. 
 
 ### Model Settings
+run_inference_on_all_trainning: False # If true, the model will be evaluated on the whole trainning set to make inference
+stop_num_epochs: 70 # 60 -80 is typically good for running whole training set 
+
 model_name: "NNConv_model"
 device: "cpu"
 model_params:

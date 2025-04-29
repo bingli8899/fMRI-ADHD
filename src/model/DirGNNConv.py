@@ -10,11 +10,7 @@ class DirGNN_model(Module):
 
         super().__init__()
         self.config = config
-
-        out_channels_DirGNN = config.model_params.out_channels_DirGNN 
-        first_hidden_channels_DirGNN = config.model_params.first_hidden_channels_DirGNN
-        out_channels_GATv2 = config.model_params.out_channels_GATv2
-        first_hidden_channels_GATvs = config.model_params.first_hidden_channels_GATv2
+        self.dropout = config.model_params.dropout
 
         self.conv1 = GCNConv(config.model_params.in_channels, 
                             config.model_params.first_hidden_channels)
@@ -63,8 +59,13 @@ class DirGNN_model(Module):
         x = self.conv1(x, edge_index)
         x = self.activation(x) 
         x = self.conv2(x, edge_index)
+
+        x = F.dropout(x, p=self.dropout, training=self.training) 
+
         x = self.activation(x)
         x = self.conv3(x, edge_index)
+
+        x = F.dropout(x, p=self.dropout, training=self.training) 
 
         out = self.pooling_function(x, data.batch.to(self.config.device))
 

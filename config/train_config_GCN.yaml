@@ -13,13 +13,13 @@ stop_num_epochs: 70 # 60 -80 is typically good for running whole training set
 
 model_params:
   in_channels: 200
-  hidden_channels: 200
-  out_channels: 200
+  hidden_channels: 32
+  out_channels: 16
   norm: "batch_norm"
   pooling_function: "global_mean_pool" 
   loss_weights: [0.25, 0.25, 0.25, 0.25]
   undirectional_graph: True
-  label_smoothing: 0.03
+  label_smoothing: 0.05
   # pooling function chosen from: global_mean_pool, global_add_pool, global_sort_pool, global_max_pool 
 predictor_paras: 
   norm_enabled: True # If add a normalization layer before predictor and model output from GCN 
@@ -36,21 +36,20 @@ predictor_paras:
 
 # Metadata processing 
 add_metadata: True
-metadata_MLP: True
-metada_MLP_out_channels: 64
+metadata_MLP: False
+metada_MLP_out_channels: 128
 resampling_enabled: True
 
 # node features: 
 node_features: 
-  identity: False
-  correlation_matrix: True
+  identity: True
+  correlation_matrix: False
   masking: True
-  mask_prob: 0.05
+  mask_prob: 0.1
 
 ### Data
 root_folder: "/u/b/i/bingl/private/fMRI-AHDH/data"
 # root_folder: "C:\\Users\\tosso\\Documents\\widsdatathon2025"
-add_metadata: True
 filter_top_fmri_columns: True
 num_top_fmri_columns: 100 # Okay, this need to think of 
 task: "four"
@@ -60,9 +59,9 @@ task: "four"
 num_folds: 5 # Cross validation
 lr: 0.001
 num_layers: 1
-dropout: 0.3
+dropout: 0.5
 batch_size: 16
-num_epochs: 200
+num_epochs: 100
 master_seed: 3407
 patience: 20
 

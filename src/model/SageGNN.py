@@ -25,11 +25,11 @@ class SageGNN_model(Module):
                              project = config.model_params.project
                              ).to(config.device) 
         
-        # self.SAGEconv2 = SAGEConv(in_channels = config.model_params.in_channels,
+        # self.SAGEconv2 = SAGEConv(in_channels = config.model_params.hidden_channels,
         #                      out_channels = out_dim,
-        #                      aggr = "mean",
-        #                      normalize = False, # change later 
-        #                      project = False, # change later 
+        #                      aggr = config.model_params.aggr,
+        #                      normalize = config.model_params.normalize, 
+        #                      project = config.model_params.project 
         #                      ).to(config.device) 
 
         if config.model_params.use_attention_pool:
@@ -105,6 +105,9 @@ class SageGNN_model(Module):
         x, edge_index, batch = data.x, data.edge_index, data.batch
         x_original = x 
         x = self.SAGEconv1(x, edge_index)  
+
+        # x = self.SAGEconv2(x, edge_index)
+        
         if self.norm_1layer: 
             x = self.norm_1layer(x) 
         if self.residual_1layer: 

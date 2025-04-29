@@ -1,18 +1,23 @@
 ### Model Settings
 model_name: "DirGNN_model"
+
+run_inference_on_all_trainning: False # If true, the model will be evaluated on the whole trainning set to make inference
+stop_num_epochs: 70 # 60 -80 is typically good for running whole training set 
+
 device: "cpu"
 model_params:
   in_channels: 200
   first_hidden_channels: 128
   second_hidden_channels: 64
-  out_channels: 32
+  out_channels: 64
   pooling_function: "global_mean_pool" 
-  loss_weights: [0.5, 0.5] # [0.25, 0.25, 0.25, 0.25] 
+  loss_weights: [0.5, 0.5] # [0.5, 0.5] # [0.25, 0.25, 0.25, 0.25]  # [0.5, 0.5] 
   label_smoothing: 0.05
   # pooling function chosen from: global_mean_pool, global_add_pool, global_sort_pool, global_max_pool 
   #DirGNNConv specific paras: 
   alpha: 0.5
   undirectional_graph: False
+  dropout: 0.2
 
 node_features: 
   identity: False
@@ -48,6 +53,7 @@ batch_size: 16
 num_epochs: 250
 master_seed: 3407
 patience: 20
+
 
 ### scaler: 
 scaling:
