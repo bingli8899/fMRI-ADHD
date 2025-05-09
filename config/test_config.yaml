@@ -1,11 +1,11 @@
 ### Model Settings
-path_to_checkpoint_folder: "/u/b/i/bingl/private/fMRI-AHDH/checkpoints/GATv2_model/2025-04-28-21-20-51"
+path_to_checkpoint_folder: "/u/b/i/bingl/private/fMRI-AHDH/checkpoints/DirGNN_GatConv_model/2025-04-29-13-50-02"
 output_folder: "/u/b/i/bingl/private/fMRI-AHDH/GNN_inference"
 
 ### Data
 root_folder: "/u/b/i/bingl/private/fMRI-AHDH/data"
 add_metadata: True
-task: ”adhd“ # This needs to be carefully checked each time 
+task: adhd # This needs to be carefully checked each time 
 
 ### scaler: 
 scaling:
