@@ -11,10 +11,10 @@ device: "cpu"
 
 model_params:
   in_channels: 200
-  hidden_channels: 64
-  out_channels: 64
+  hidden_channels: 32
+  out_channels: 32
   norm: "batch_norm"
-  pooling_function: "global_max_pool" 
+  pooling_function: "global_mean_pool" 
   # pooling function chosen from: global_mean_pool, global_add_pool, global_sort_pool, global_max_pool 
   loss_weights: [0.5, 0.5]
   label_smoothing: 0.05
@@ -63,7 +63,6 @@ resampling_enabled: True
 task: sex # adhd, four
 
 ### Optimizer
-
 
 ### Hyperparameters
 num_folds: 5 # Cross validation

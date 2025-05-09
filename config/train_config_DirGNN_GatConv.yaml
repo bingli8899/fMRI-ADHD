@@ -58,7 +58,7 @@ add_metadata: True
 resampling_enabled: True
 
 ### Classification type 
-task: sex # adhd, four
+task: adhd # adhd, four
 
 ### Optimizer
 

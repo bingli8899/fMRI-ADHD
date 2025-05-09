@@ -6,6 +6,7 @@ from torch_geometric.nn import Sequential, SAGEConv
 from src.utility.ut_model import name_to_pooling, name_to_predictor, name_to_activation 
 from torch_geometric.nn import SAGPooling, EdgePooling, GlobalAttention
 from torch.nn import Sequential as Seq
+import torch.nn.functional as F
 
 
 class SageGNN_model(Module):
@@ -13,7 +14,8 @@ class SageGNN_model(Module):
     def __init__(self, config): 
 
         super(SageGNN_model, self).__init__()
-        self.config = config  
+        self.config = config 
+        self.dropout = config.dropout 
 
         out_dim = config.model_params.out_channels 
 
@@ -107,6 +109,7 @@ class SageGNN_model(Module):
         x = self.SAGEconv1(x, edge_index)  
 
         # x = self.SAGEconv2(x, edge_index)
+        x = F.dropout(x, self.dropout, training=self.training)
         
         if self.norm_1layer: 
             x = self.norm_1layer(x) 

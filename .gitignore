@@ -4,6 +4,8 @@ __pycache__/
 
 notebooks/.ipynb_checkpoints/
 .DS_Store
+notebooks/test.ipynb
+notebooks/InitialDataCheck.ipynb
 
 # Ignore stuff in Bing's local: 
 unused_codes/
