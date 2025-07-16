@@ -1,7 +1,7 @@
 # fMRI-AHDH
 Repo to document traditional ML models and Graph Neural Networks (GNN) built for for WiDS 2025, using fMRI connectome data and demographic data to predict sex-specific ADHD diagnosis. 
 
-The repo demostrates ML models (MLprediction.py) and seven GNN model archiectures (GNNprediction.py). 
+The repo demostrates ML models (MLprediction.py) and seven GNN model archiectures (GNNprediction.py). Model outputs are ensembled to make final predictions. 
 
 ## 🚀 How about a Quick Start? 
 ### GNN Model Training
@@ -32,21 +32,12 @@ python MLprediction.py --config config/train_config_ML.yaml
 
 **ML Model Training & Inference Modes:**
 The traditional ML pipeline supports flexible training and inference modes controlled by configuration parameters:
+  - Training + Inference Mode: `training_enabled: True` and `run_inference_on_test: True`
+  - Inference Only Mode: `training_enabled: False` and `run_inference_on_test: True`
+  - Training Only Mode: `training_enabled: True` and `run_inference_on_test: False`
 
-- **Training + Inference Mode:** `training_enabled: True` and `run_inference_on_test: True`
-  - Trains new models using cross-validation
-  - Automatically runs inference on test data using best trained model
-  - Saves both training results and test predictions
-
-- **Inference Only Mode:** `training_enabled: False` and `run_inference_on_test: True`
-  - Loads pre-trained model checkpoints
-  - Runs inference on test data only
-  - Requires existing model files and configurations
-
-- **Training Only Mode:** `training_enabled: True` and `run_inference_on_test: False`
-  - Trains and evaluates models using cross-validation
-  - Saves trained models but skips test inference
-  - Useful for model development and hyperparameter tuning 
+### Ensembling: 
+The output of resulting prediction in `.csv` files could be ensembled using `src/data/summarize_csv.py`. Please see `Future Direction` section for potentials about our ensembling method.   
 
 ## 📋 GNNprediction.py Scripts Documentation
 **Purpose:** Main inference script for Graph Neural Network models. tLoads trained GNN models and performs prediction on test data. Below is a figure containing the overview of our major workflow: 
@@ -149,7 +140,34 @@ The traditional ML pipeline supports flexible training and inference modes contr
    - _Key Features_: Parallel DirGNN and GATv2 branches
    - _Ensemble Method_: Concatenation of both branch outputs
 
-##📋 MLprediction.py (Traditional ML Pipeline)
+### Example Usage
+
+Training GNN Models on training dataset: 
+```bash
+python GNNprediction.py --train_config config/train_config_[model_name].yaml
+```
+Making inference on test dataset: 
+```bash
+python src/main.py --test_config config/test_config.yaml
+```
+
+### Expected Output Structure
+Training Output:
+```
+checkpoints/
+└── [model_name]/
+    └── 2024-01-01-12-00-00/  # Time-string when running the training 
+        ├── checkpoint.pth          # Best model weights
+        ├── config.yaml             # Training configuration
+        └── scaler_MeanStd.pth     # Data scaler
+```
+Testing Output:
+```
+GNN_inference/
+└── predictions.csv  # Final predictions in .csv file 
+``` 
+
+## 📋 MLprediction.py (Traditional ML Pipeline)
 **Location:** `MLprediction.py`
 
 **Purpose:** Traditional machine learning pipeline for fMRI-based ADHD and sex prediction using classical ML algorithms.
@@ -178,10 +196,28 @@ PS: Demographic data could be appeneded or not depending on user's choice.
 ```bash
 python MLprediction.py --config config/train_config_ML.yaml
 ```
+Training and testing mode could be changed on the `config/train_config_ML.yaml` file. 
+
+### Expected Output Structure
+Testing Output:
+```
+ML_inference/
+├── final_predictions_[model_name]-[task].csv    # Final predictions
+└── [model_name]_[task]Predic_[DataProcessMethod]fmri.txt  # info about different model building 
+``` 
+
 **Pipeline Overview** 
 A basic pipeline for ML prediction is listed [View PDF Documentation](readme_image/TradML.pdf) 
-[!fugure2_tradML_pipeline](readme_image/TradML.png) 
 
-## 🔮 Future Direction 
-It would be interesting to explore LLM and using the metadata alone to make prediction. We included a testing notebook `notebooks/test.ipynb` for LLM prompt buidling, although it is not finished. 
+![fugure2_tradML_pipeline](readme_image/TradML.png) 
+
+## 🔮 Future Direction: 
+
+1. It would be interesting to explore LLM and using the metadata alone to make prediction. We included a testing notebook `notebooks/test.ipynb` for LLM prompt buidling, although it is not finished. 
+
+2. We need better ensembling methods to ensamble the model outputs from both Tradiational ML models and GNN models. 
+
+3. The training dataset is small and better feature enginnering to select the best features would be beneficial. 
+
+4. Easier models might prevent over-fitting and lead to better F1. 
 
