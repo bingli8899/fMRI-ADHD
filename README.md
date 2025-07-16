@@ -52,6 +52,7 @@ The traditional ML pipeline supports flexible training and inference modes contr
 ## 📋 GNNprediction.py Scripts Documentation
 **Purpose:** Main inference script for Graph Neural Network models. tLoads trained GNN models and performs prediction on test data. Below is a figure containing the overview of our major workflow: 
 [View PDF Documentation](readme_image/GNN_explained.pdf)
+![GNN_explanations](readme_image/GNN_explained.png)
 
 **Key Features:**
 - **Data Preprocessing Pipeline:** Comprehensive fMRI connectome data preprocessing and scaling with the following steps:
