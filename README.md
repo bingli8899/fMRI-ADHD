@@ -3,7 +3,7 @@ Repo to document traditional ML models and Graph Neural Networks (GNN) built for
 
 The repo demostrates ML models (MLprediction.py) and seven GNN model archiectures (GNNprediction.py). 
 
-## How about a Quick Start? 
+## 🚀 How about a Quick Start? 
 ### GNN Model Training
 To run GNN models for training:
 ```bash
@@ -50,9 +50,8 @@ The traditional ML pipeline supports flexible training and inference modes contr
 
 
 ## 📋 GNNprediction.py Scripts Documentation
-### 1. GNNprediction.py (GNN Training Pipeline) 
-
-**Purpose:** Main inference script for Graph Neural Network models. tLoads trained GNN models and performs prediction on test data.
+**Purpose:** Main inference script for Graph Neural Network models. tLoads trained GNN models and performs prediction on test data. Below is a figure containing the overview of our major workflow: 
+[View PDF Documentation](readme_image/GNN_explained.pdf)
 
 **Key Features:**
 - **Data Preprocessing Pipeline:** Comprehensive fMRI connectome data preprocessing and scaling with the following steps:
@@ -152,7 +151,7 @@ The traditional ML pipeline supports flexible training and inference modes contr
    - **Ensemble Method:** Concatenation of both branch outputs
    - **Flexibility:** Independent dropout rates for each branch
 
-### 3. MLprediction.py (Traditional ML Pipeline)
+##📋 MLprediction.py (Traditional ML Pipeline)
 **Location:** `MLprediction.py`
 
 **Purpose:** Traditional machine learning pipeline for fMRI-based ADHD and sex prediction using classical ML algorithms.
@@ -186,3 +185,5 @@ PS: Demographic data could be appeneded or not depending on user's choice.
 ```bash
 python MLprediction.py --config config/train_config_ML.yaml
 ```
+
+
