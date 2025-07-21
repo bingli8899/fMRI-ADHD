@@ -1,4 +1,4 @@
-# fMRI-AHDH
+# fMRI-ADHD
 Repo to document traditional ML models and Graph Neural Networks (GNN) built for for WiDS 2025, using fMRI connectome data and demographic data to predict sex-specific ADHD diagnosis. 
 
 The repo demostrates ML models (MLprediction.py) and seven GNN model archiectures (GNNprediction.py). Model outputs are ensembled to make final predictions. 
